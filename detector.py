@@ -180,19 +180,14 @@ def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_gri
     Returns:
     - det_ints (numpy.ndarray): A 2D array representing the integrated intensity values on the detector.
     """
-
-    # cartesian indexing
-    x_vals = qx[0,:,0] # x = columns (2nd axis)
-    y_vals = qy[:,0,0] # y = rows (1st axis)
-    z_vals = qz[0,0,:] # z = depth (3rd axis)
     
     
     det_ints = np.zeros_like(det_x_grid)
     for row in range(len(v_axis_vals)):
         for col in range(len(h_axis_vals)):
-            x_idx = np.argmin(np.abs(x_vals-det_x_grid[row,col]))
-            y_idx = np.argmin(np.abs(y_vals-det_y_grid[row,col]))
-            z_idx = np.argmin(np.abs(z_vals-det_z_grid[row,col]))
+            x_idx = np.argmin(np.abs(qx-det_x_grid[row,col]))
+            y_idx = np.argmin(np.abs(qy-det_y_grid[row,col]))
+            z_idx = np.argmin(np.abs(qz-det_z_grid[row,col]))
             det_ints[row, col] = int_voxels[y_idx, x_idx, z_idx]
 
     return det_ints
