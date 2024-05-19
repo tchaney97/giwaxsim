@@ -9,7 +9,7 @@ from numpy.fft import fftn, fftshift
 from utilities import load_xyz, gaussian_kernel
 from ptable_dict import ptable
 
-def generate_density_grid(xyz_path, sigma, voxel_size):
+def generate_density_grid(xyz_path, sigma, voxel_size, min_ax_size=256):
     """
     Generates a 3D voxelized electron density grid from .xyz file. electron density is 
     smeared using gaussian convolution with width sigma. Smearing is skipped if sigma=0 
@@ -20,9 +20,9 @@ def generate_density_grid(xyz_path, sigma, voxel_size):
 
     Returns:
     - density_grid: 3D meshgrid of electron density values
-    - x_mesh: 3D meshgrid of x coordinate values 
-    - y_mesh: 3D meshgrid of y coordinate values 
-    - z_mesh: 3D meshgrid of z coordinate values 
+    - x_axis: 1D array of x coordinate values 
+    - y_axis: 1D array of y coordinate values 
+    - z_axis: 1D array of z coordinate values 
     """
     # Extracting the atomic symbols and positions from the xyz file
     coords, symbols = load_xyz(xyz_path)
@@ -38,13 +38,25 @@ def generate_density_grid(xyz_path, sigma, voxel_size):
     grid_size_x = int(np.ceil((np.max(coords[:,0])+buffer)/voxel_size))
     grid_size_y = int(np.ceil((np.max(coords[:,1])+buffer)/voxel_size))
     grid_size_z = int(np.ceil((np.max(coords[:,2])+buffer)/voxel_size))
-    x_axis = np.linspace(0, grid_size_x*voxel_size, grid_size_x)
-    y_axis = np.linspace(0, grid_size_y*voxel_size, grid_size_y)
-    z_axis = np.linspace(0, grid_size_z*voxel_size, grid_size_z)
-    x_mesh, y_mesh, z_mesh = np.meshgrid(x_axis, y_axis, z_axis)
+
+    #calcuate number of voxel grid points, pad to nearest 2^n
+    grid_vox_x = 1 << (grid_size_x - 1).bit_length()
+    grid_vox_y = 1 << (grid_size_y - 1).bit_length()
+    grid_vox_z = 1 << (grid_size_z - 1).bit_length()
+    if grid_vox_x < min_ax_size:
+        grid_vox_x = min_ax_size
+    if grid_vox_y < min_ax_size:
+        grid_vox_y = min_ax_size
+    if grid_vox_z < min_ax_size:
+        grid_vox_z = min_ax_size
+
+    #create axes
+    x_axis = np.linspace(0, grid_vox_x*voxel_size, grid_vox_x)
+    y_axis = np.linspace(0, grid_vox_y*voxel_size, grid_vox_y)
+    z_axis = np.linspace(0, grid_vox_z*voxel_size, grid_vox_z)
 
     # Create an empty grid
-    density_grid = np.zeros_like(x_mesh)
+    density_grid = np.zeros((grid_vox_y, grid_vox_x, grid_vox_z))
 
 
     # Populate the grid
@@ -55,40 +67,35 @@ def generate_density_grid(xyz_path, sigma, voxel_size):
     # Create a Gaussian kernel
     if sigma:
         sigma_voxel = sigma/voxel_size
-        kernel_size = 3 * sigma_voxel + 1  # Ensure the kernel size covers enough of the Gaussian
-        gaussian_kernel_3d = gaussian_kernel(kernel_size, sigma)
+        kernel_size = 6 * sigma_voxel + 1  # Ensure the kernel size covers enough of the Gaussian
+        gaussian_kernel_3d = gaussian_kernel(kernel_size, sigma_voxel)
         # convolve gaussian with 
         density_grid = convolve(density_grid, gaussian_kernel_3d, mode='same')
 
-    return density_grid, x_mesh, y_mesh, z_mesh
+    return density_grid, x_axis, y_axis, z_axis
 
-def convert_grid_qspace(density_grid, x_mesh, y_mesh, z_mesh):
+def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis):
     """
     Generates a 3D voxelized scattering intensity grid from input electron density grid.
     Scattering is given as norm**2 of fft and new qmesh axes
     
     Parameters:
     - density_grid: 3D meshgrid of electron density values
-    - x_mesh: 3D meshgrid of x coordinate values 
-    - y_mesh: 3D meshgrid of y coordinate values 
-    - z_mesh: 3D meshgrid of z coordinate values 
+    - x_axis: 1D array of x coordinate values 
+    - y_axis: 1D array of y coordinate values 
+    - z_axis: 1D array of z coordinate values 
 
     Returns:
     - iq: 3D meshgrid of scattering intensity values
-    - qx_mesh: 3D meshgrid of qx coordinate values 
-    - qy_mesh: 3D meshgrid of qy coordinate values 
-    - qz_mesh: 3D meshgrid of qz coordinate values 
+    - qx_axis: 1D array of qx coordinate values 
+    - qy_axis: 1D array of qy coordinate values 
+    - qz_axis: 1D array of qz coordinate values 
     """
-
-    # cartesian indexing
-    x_vals = x_mesh[0,:,0] # x = columns (2nd axis)
-    y_vals = y_mesh[:,0,0] # y = rows (1st axis)
-    z_vals = z_mesh[0,0,:] # z = depth (3rd axis)
     
-    voxel_size = x_vals[1]-x_vals[0]
-    grid_size_x = len(x_vals)
-    grid_size_y = len(y_vals)
-    grid_size_z = len(z_vals)
+    voxel_size = x_axis[1]-x_axis[0]
+    grid_size_x = len(x_axis)
+    grid_size_y = len(y_axis)
+    grid_size_z = len(z_axis)
 
     # Calculate 3D q-values
     qx = np.fft.fftfreq(grid_size_x, d=voxel_size) * 2 * np.pi
@@ -97,7 +104,6 @@ def convert_grid_qspace(density_grid, x_mesh, y_mesh, z_mesh):
     qx_shifted = fftshift(qx)
     qy_shifted = fftshift(qy)
     qz_shifted = fftshift(qz)
-    qx_mesh, qy_mesh, qz_mesh = np.meshgrid(qx_shifted, qy_shifted, qz_shifted)
 
     # Compute the Fourier transform of the density grid
     ft_density = fftn(density_grid)
@@ -106,9 +112,9 @@ def convert_grid_qspace(density_grid, x_mesh, y_mesh, z_mesh):
     # Magnitude squared of the Fourier transform for scattering intensity I(q)
     iq = np.abs(ft_density_shifted)**2
 
-    return iq, qx_mesh, qy_mesh, qz_mesh
+    return iq, qx_shifted, qy_shifted, qz_shifted
 
-def plot_3D_grid(density_grid, x_mesh, y_mesh, z_mesh, cmap, threshold_pct=98, num_levels=10):
+def plot_3D_grid(density_grid, x_axis, y_axis, z_axis, cmap, threshold_pct=98, num_levels=10, log=True):
     """
     Plots a 3D scatter plot of an electron density grid with color mapping and opacity levels.
 
@@ -125,18 +131,20 @@ def plot_3D_grid(density_grid, x_mesh, y_mesh, z_mesh, cmap, threshold_pct=98, n
     
     y, x, z = np.where(density_grid>np.percentile(density_grid, threshold_pct))
     values = density_grid[y, x, z]
-    normalized_values = values / np.max(values)
-
+    if log:
+        values = np.log(values)
+    max_values = np.max(values)
+    min_values = np.min(values)
     # Get the absolute coordinates
-    x_abs = x_mesh[y, x, z]
-    y_abs = y_mesh[y, x, z]
-    z_abs = z_mesh[y, x, z]
+    x_abs = x_axis[x]
+    y_abs = y_axis[y]
+    z_abs = z_axis[z]
     
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     
     # Define the number of levels of opacity
-    opacities = np.linspace(0.01,0.2,num_levels)
+    opacities = np.linspace(0.3,0.01,num_levels)
 
     cmap = plt.get_cmap(cmap)
     colors = cmap(np.linspace(0.3, 1, num_levels))
@@ -145,8 +153,11 @@ def plot_3D_grid(density_grid, x_mesh, y_mesh, z_mesh, cmap, threshold_pct=98, n
         # Calculate the opacity for the current level
         opacity = opacities[i]
         color = colors[i]
+
+        mask_low = 100*i/num_levels
+        mask_high = 100*(i+1)/num_levels
         # Determine the data points that fall into the current opacity level
-        mask = (normalized_values > (i / num_levels)) & (normalized_values <= ((i + 1) / num_levels))
+        mask = (values > np.percentile(values, mask_low)) & (values <= np.percentile(values, mask_high))
         
         # Scatter plot for the current subset of data
         ax.scatter(x_abs[mask], 
