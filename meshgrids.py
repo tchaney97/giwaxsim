@@ -197,4 +197,7 @@ def plot_3D_grid(density_grid, x_axis, y_axis, z_axis, cmap, threshold_pct=98, n
     ax.yaxis.pane.set_edgecolor('white')
     ax.zaxis.pane.set_edgecolor('white')
     ax.grid(color='white', linestyle='--', linewidth=0.5)
-    plt.show()
+
+    return fig, ax
+
+    # plt.show()
