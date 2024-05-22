@@ -1,10 +1,12 @@
 import numpy as np
+import dask
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
 from scipy.signal import convolve
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
+from tqdm.auto import tqdm
 
 from utilities import load_xyz, gaussian_kernel
 from ptable_dict import ptable
@@ -28,7 +30,6 @@ def generate_density_grid(xyz_path, sigma, voxel_size, min_ax_size=256):
     coords, symbols = load_xyz(xyz_path)
 
     # Shift coords array to origin (buffer ensures room for Gaussian smearing)
-    coords = np.array(coords)
     buffer = 3 * sigma # same size as guassian kernel (made later)
     coords[:,0] -= np.min(coords[:,0])-buffer
     coords[:,1] -= np.min(coords[:,1])-buffer
@@ -62,7 +63,7 @@ def generate_density_grid(xyz_path, sigma, voxel_size, min_ax_size=256):
     # Populate the grid
     for coord, symbol in zip(coords, symbols):
         grid_coord = (coord / voxel_size).astype(int)
-        density_grid[grid_coord[1], grid_coord[0], grid_coord[2]] += (ptable[symbol])*voxel_size**3
+        density_grid[grid_coord[1], grid_coord[0], grid_coord[2]] += (ptable[symbol]) 
     
     # Create a Gaussian kernel
     if sigma:
@@ -201,3 +202,115 @@ def plot_3D_grid(density_grid, x_axis, y_axis, z_axis, cmap, threshold_pct=98, n
     return fig, ax
 
     # plt.show()
+
+# Dask functions below:
+def load_array_from_npy_stack(npy_paths):
+    arrs = []
+    for npy_path in npy_paths:
+        arr = np.load(npy_path)
+        arrs.append(arr)
+
+    return np.concatenate(arrs, axis=1)   
+
+def generate_electron_grid_dask(xyz_path, 
+                                voxel_size,
+                                segments,
+                                npySavePath,
+                                sigma,
+                                min_ax_size = 256):
+    """
+    Generates a 3D voxelized electron density grid from .xyz file. Does not apply
+    any smearing, electron values will be contained only inside assigned voxels.
+    Targeted for large arrays where memory would be an issue to load the whole 
+    array, so segments along the x direction are saved as npy files and then
+    reloaded as a dask object (already persisted).
+    
+    Parameters:
+    - xyz_path (str or pathlib.Path): path to xyz file of molecule, NP, etc
+    - voxel_size (float): size of voxels in angstroms
+    - segments (int): number of segments to make along x direction, this will 
+                      also be used for the chunk sizes in the dask array
+    - npySavePath (str or pathlib.Path): path to save grid segment npy files
+    - sigma (float): used to shift coords to origin for gaussian smearing later
+    - min_ax_size (int): minimum number of voxels to use for grid, if not 
+                         exceeded based on coordinate values & voxel size
+
+    Returns:
+    - density_grid: chunked dask array 
+    - x_axis: 1D numpy array of x coordinate values 
+    - y_axis: 1D numpy array of y coordinate values 
+    - z_axis: 1D numpy array of z coordinate values 
+    """
+    # Extracting the atomic symbols and positions from the xyz file
+    coords, symbols = load_xyz(xyz_path)
+
+    # Shift coords array to origin (buffer ensures room for Gaussian smearing)
+    buffer = 3 * sigma # same size as guassian kernel (made later)
+    coords[:,0] -= np.min(coords[:,0])-buffer
+    coords[:,1] -= np.min(coords[:,1])-buffer
+    coords[:,2] -= np.min(coords[:,2])-buffer
+
+    # axis grids
+    grid_size_x = int(np.ceil((np.max(coords[:,0])+buffer)/voxel_size))
+    grid_size_y = int(np.ceil((np.max(coords[:,1])+buffer)/voxel_size))
+    grid_size_z = int(np.ceil((np.max(coords[:,2])+buffer)/voxel_size))
+
+    #calcuate number of voxel grid points, pad to nearest 2^n
+    grid_vox_x = 1 << (grid_size_x - 1).bit_length()
+    grid_vox_y = 1 << (grid_size_y - 1).bit_length()
+    grid_vox_z = 1 << (grid_size_z - 1).bit_length()
+    if grid_vox_x < min_ax_size:
+        grid_vox_x = min_ax_size
+    if grid_vox_y < min_ax_size:
+        grid_vox_y = min_ax_size
+    if grid_vox_z < min_ax_size:
+        grid_vox_z = min_ax_size
+
+    #create axes
+    x_axis = np.linspace(0, grid_vox_x*voxel_size, grid_vox_x)
+    y_axis = np.linspace(0, grid_vox_y*voxel_size, grid_vox_y)
+    z_axis = np.linspace(0, grid_vox_z*voxel_size, grid_vox_z)
+
+
+    # Populate grid segments:
+    # Sort coordinates & symbols by the x coordinate value (by entering as the last column in np.lexsort)
+    ind = np.lexsort((coords[:,2], coords[:,1], coords[:,0]))  # return sorted indices values (first value)
+    symbols = symbols[ind]
+    coords = coords[ind]
+
+    # Loop over each grid segment to populate
+    for segment_num in tqdm(range(segments), desc='Populating & saving grid segments'):
+        # Create empty grid segment
+        grid_vox_x_segment = int(grid_vox_x/segments)
+        density_grid_segment = np.zeros((grid_vox_y, grid_vox_x_segment, grid_vox_z))
+        
+        # Slice x_axis for segment to identify x maximum and minimum
+        x_axis_slice = x_axis[segment_num * grid_vox_x_segment:
+                            (segment_num+1) * grid_vox_x_segment]
+        x_min = x_axis_slice[0]
+        x_max = x_axis_slice[-1]
+        
+        # Downselect pre-sorted coords & symbols segment to apply to loop
+        segment_coords_mask = (coords[:,0] > x_min) & (coords[:,0] < x_max)
+        segment_coords = coords[segment_coords_mask]
+        segment_symbols = symbols[segment_coords_mask]
+
+        # Populate the grid 
+        for coord, symbol in zip(segment_coords, segment_symbols):
+            grid_coord = (coord / voxel_size).astype(int)
+            density_grid_segment[ grid_coord[1], 
+                                (grid_coord[0]-(grid_vox_x_segment*segment_num)), 
+                                grid_coord[2]] += (ptable[symbol])
+            
+        # print(np.count_nonzero(density_grid_segment))
+        npy_savename = f'grid_segment_along-x_num-{segment_num}_shape-{grid_vox_y}-{grid_vox_x_segment}-{grid_vox_z}.npy'
+        np.save(npySavePath.joinpath(npy_savename), density_grid_segment)
+
+    # Load npy files back in as a dask array
+    npy_paths = sorted(npySavePath.glob('*'))
+    density_grid = dask.delayed(load_array_from_npy_stack)(npy_paths)
+    density_grid = dask.array.from_delayed(density_grid, shape=(grid_vox_y, grid_vox_x, grid_vox_z), dtype=float)
+    density_grid = density_grid.rechunk((grid_vox_y, int(grid_vox_x/8), grid_vox_z))
+    density_grid = density_grid.persist()    
+
+    return density_grid, x_axis, y_axis, z_axis
