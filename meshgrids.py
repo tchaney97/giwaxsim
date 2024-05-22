@@ -212,7 +212,7 @@ def load_array_from_npy_stack(npy_paths):
 
     return np.concatenate(arrs, axis=1)   
 
-def generate_electron_grid_dask(xyz_path, 
+def generate_electron_grid_npys(xyz_path, 
                                 voxel_size,
                                 segments,
                                 npySavePath,
@@ -236,10 +236,15 @@ def generate_electron_grid_dask(xyz_path,
                          exceeded based on coordinate values & voxel size
 
     Returns:
-    - density_grid: chunked dask array 
     - x_axis: 1D numpy array of x coordinate values 
     - y_axis: 1D numpy array of y coordinate values 
     - z_axis: 1D numpy array of z coordinate values 
+    - grid_vox_x: number of voxels along x direction
+    - grid_vox_y: number of voxels along y direction
+    - grid_vox_z: number of voxels along z direction
+
+    Generates:
+    - npy files in specified npySavePath folder
     """
     # Extracting the atomic symbols and positions from the xyz file
     coords, symbols = load_xyz(xyz_path)
@@ -306,11 +311,13 @@ def generate_electron_grid_dask(xyz_path,
         npy_savename = f'grid_segment_along-x_num-{segment_num}_shape-{grid_vox_y}-{grid_vox_x_segment}-{grid_vox_z}.npy'
         np.save(npySavePath.joinpath(npy_savename), density_grid_segment)
 
+    return x_axis, y_axis, z_axis, grid_vox_x, grid_vox_y, grid_vox_z
+
+def load_npy_files_to_dask(npySavePath, grid_vox_x, grid_vox_y, grid_vox_z):
     # Load npy files back in as a dask array
     npy_paths = sorted(npySavePath.glob('*'))
     density_grid = dask.delayed(load_array_from_npy_stack)(npy_paths)
     density_grid = dask.array.from_delayed(density_grid, shape=(grid_vox_y, grid_vox_x, grid_vox_z), dtype=float)
     density_grid = density_grid.rechunk((grid_vox_y, int(grid_vox_x/8), grid_vox_z))
-    density_grid = density_grid.persist()    
 
-    return density_grid, x_axis, y_axis, z_axis
+    return density_grid.persist()    
