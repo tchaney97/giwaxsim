@@ -1,5 +1,4 @@
 import numpy as np
-import dask
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
@@ -230,7 +229,7 @@ def generate_electron_grid_npys(xyz_path,
     - voxel_size (float): size of voxels in angstroms
     - segments (int): number of segments to make along x direction, this will 
                       also be used for the chunk sizes in the dask array
-    - npySavePath (str or pathlib.Path): path to save grid segment npy files
+    - npySavePath (pathlib.Path): path to save grid segment npy files
     - sigma (float): used to shift coords to origin for gaussian smearing later
     - min_ax_size (int): minimum number of voxels to use for grid, if not 
                          exceeded based on coordinate values & voxel size
@@ -313,8 +312,14 @@ def generate_electron_grid_npys(xyz_path,
 
     return x_axis, y_axis, z_axis, grid_vox_x, grid_vox_y, grid_vox_z
 
-def load_npy_files_to_dask(npySavePath, grid_vox_x, grid_vox_y, grid_vox_z):
-    # Load npy files back in as a dask array
+def load_npy_files_to_dask(dask, npySavePath, grid_vox_x, grid_vox_y, grid_vox_z):
+    """
+    Load npy files back in as a dask array:
+    
+    Inputs:
+    - dask: the full dask module, probably a better way to do this...
+    - npySavePath: pathlib.Path to the npy files
+    """
     npy_paths = sorted(npySavePath.glob('*'))
     density_grid = dask.delayed(load_array_from_npy_stack)(npy_paths)
     density_grid = dask.array.from_delayed(density_grid, shape=(grid_vox_y, grid_vox_x, grid_vox_z), dtype=float)
