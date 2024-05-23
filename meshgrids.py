@@ -304,36 +304,42 @@ def generate_electron_grid_npys_fixed(xyz_path,
     return x_axis, y_axis, z_axis, grid_vox_x, grid_vox_y, grid_vox_z
 
 def get_allowed_vox_breaks(sigma, voxel_size, coords, axis):
-     # Find all voxels along axis where there is enough space between point smeared with gaussian
-    diff_threshold = voxel_size + (3 * sigma)  # set diff threshold by voxel size + (3*sigma) 
-    diff_axis = np.diff(coords, axis=axis)[:, 0]  # get difference values array
-    diff_axis = np.append(diff_axis, 0)  # add extra zero at the end to make same shape as coords to use as mask
-    coord_idx_cuts = np.nonzero(diff_axis>diff_threshold)[0] # + 1  # find indices with difference value from previous greater than diff threshold 
-    taken_coords = coords[:,axis][coord_idx_cuts]
-    # Create a new array to store the shifted values
-    empty_coords = np.zeros_like(taken_coords, dtype=float)
-    # Compute the shifted values
+    """Find all voxels along axis where there is enough space between point smeared with gaussian"""
+    diff_threshold = voxel_size + (3 * sigma)  # Set diff threshold by voxel size + (3*sigma) 
+    diff_axis = np.diff(coords, axis=axis)[:, 0]  # Get difference values array
+    diff_axis = np.append(diff_axis, 0)  # Add extra zero at the end to make same shape as coords to use as mask
+    coord_idx_cuts = np.nonzero(diff_axis>diff_threshold)[0]  # Find indices with difference value from previous greater than diff threshold 
+    # So these x coordinate values represent atom planes just next to a break
+    taken_coords = coords[:,axis][coord_idx_cuts]  
+
+    # We want to find the halfway point between the taken coords: 
+    empty_coords = np.zeros_like(taken_coords, dtype=float) # Create a new array to store the shifted values
     empty_coords[0] = taken_coords[0] / 2  # First element is the average of itself and zero
     for i in range(1, len(taken_coords)):
         empty_coords[i] = (taken_coords[i] + taken_coords[i - 1]) / 2
-    allowed_voxel_breaks_in_material = (empty_coords / voxel_size).astype(int)  # convert to number of voxels, these are allowed positions to segment
+    # Convert to number of voxels, these are allowed positions to segment
+    allowed_voxel_breaks_in_material = (empty_coords / voxel_size).astype(int)  
     
     return allowed_voxel_breaks_in_material
 
 def get_flexible_voxel_breaks(segment_vox_size, min_ax_size, allowed_vox_breaks, x_axis):
-    # Based on allowed voxel points above, define voxel slices along specified axis
-    vox_break_targs = np.arange(segment_vox_size, min_ax_size, segment_vox_size)  # target voxel breakpoints (not including 0 & end)
+    """Based on allowed voxel points, define voxel slices along specified axis"""
+    # Target voxel breakpoints (not including 0 & end)
+    vox_break_targs = np.arange(segment_vox_size, min_ax_size, segment_vox_size)  
 
     # Generate actual allowed break points
-    vox_breaks = np.array([0, min_ax_size])
+    vox_breaks = np.array([0, min_ax_size])  # Add 0 & end first
     for vox_break_targ in vox_break_targs:
-        if vox_break_targ > allowed_vox_breaks[-1]:
+        if vox_break_targ > allowed_vox_breaks[-1]: 
+            # Target is fine if it is beyond material in voxel space
             vox_breaks = np.append(vox_breaks, vox_break_targ)
         else:
-            vox_break_diffs = np.abs(allowed_vox_breaks - vox_break_targ)
+            # Otherwise, look for closest value in allowed voxel breaks
+            vox_break_diffs = np.abs(allowed_vox_breaks - vox_break_targ) 
+            # Pull out closest values, these will likely shift the target values
             vox_break_shifted = allowed_vox_breaks[vox_break_diffs==vox_break_diffs.min()][0]
             vox_breaks = np.append(vox_breaks, vox_break_shifted)
-    vox_breaks.sort()
+    vox_breaks.sort()  # Put 0 & end in order
 
     # Reshape breakpoints into tuples of min/max
     vox_axis_mins = vox_breaks[:-1]
@@ -363,7 +369,8 @@ def flexible_density_grid_npys_along_x(xyz_path,
     - xyz_path (str or pathlib.Path): path to xyz file of molecule, NP, etc
     - npySavePath (pathlib.Path): path to save grid segment npy files
     - voxel_size (float): size of voxels in angstroms
-    - sigma (float): for applying gaussian convolution (and buffer voxels)
+    - sigma (float or None): for applying gaussian convolution (and buffer 
+                             voxels). No convolution if sigma==None.
     - segment_vox_size (int): target number of voxels per numpy segment, these
                               will be adjusted based on the material input 
                               and sigma value to segment between atoms
@@ -433,7 +440,7 @@ def flexible_density_grid_npys_along_x(xyz_path,
 
     # Loop over each vox segment to populate
     grid_vox_segments = np.array([])  # Running total of each segment size
-    for i, vox_axis_slice in enumerate(tqdm(vox_axis_slices, desc='Populating & saving grid segments')):
+    for i, vox_axis_slice in enumerate(tqdm(vox_axis_slices, desc='Populating, smearing, & saving segments')):
         # Get segment size
         grid_vox_axis_segment = vox_axis_slice[1] - vox_axis_slice[0]
         # Add segment size to running total
@@ -452,7 +459,6 @@ def flexible_density_grid_npys_along_x(xyz_path,
         segment_symbols = symbols[segment_coords_mask]
 
         # Populate the grid 
-        print(int(grid_vox_segments.sum()))
         for coord, symbol in zip(segment_coords, segment_symbols):
             grid_coord = np.round((coord / voxel_size),0).astype('int')
             density_grid_segment[ grid_coord[1], 
@@ -466,7 +472,6 @@ def flexible_density_grid_npys_along_x(xyz_path,
             gaussian_kernel_3d = gaussian_kernel(kernel_size, sigma_voxel)
             # convolve gaussian with 
             density_grid_segment = convolve(density_grid_segment, gaussian_kernel_3d, mode='same')
-            print('did_convolution')
             
         npy_savename = f'grid_segment_along-x_sigma-{sigma}_num-{i}_shape-{grid_vox_y}-{grid_vox_axis_segment}-{grid_vox_z}.npy'
         np.save(npySavePath.joinpath(npy_savename), density_grid_segment)   
