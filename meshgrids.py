@@ -308,17 +308,16 @@ def get_allowed_vox_breaks(sigma, voxel_size, coords, axis):
     diff_threshold = voxel_size + (3 * sigma)  # Set diff threshold by voxel size + (3*sigma) 
     diff_axis = np.diff(coords, axis=axis)[:, 0]  # Get difference values array
     diff_axis = np.append(diff_axis, 0)  # Add extra zero at the end to make same shape as coords to use as mask
-    coord_idx_cuts = np.nonzero(diff_axis>diff_threshold)[0]  # Find indices with difference value from previous greater than diff threshold 
-    # So these x coordinate values represent atom planes just next to a break
-    taken_coords = coords[:,axis][coord_idx_cuts]  
+    # Find indices with difference value from previous greater than diff threshold 
+    coord_idx_cuts_lo = np.nonzero(diff_axis>diff_threshold)[0]     # Indices on lower side of difference
+    coord_idx_cuts_hi = np.nonzero(diff_axis>diff_threshold)[0] + 1 # Indices on higher side of difference  
+    # Get corresponding coordinat values
+    taken_coords_lo = coords[:,axis][coord_idx_cuts_lo]  
+    taken_coords_hi = coords[:,axis][coord_idx_cuts_hi]  
 
     # We want to find the halfway point between the taken coords: 
-    empty_coords = np.zeros_like(taken_coords, dtype=float) # Create a new array to store the shifted values
-    empty_coords[0] = taken_coords[0] / 2  # First element is the average of itself and zero
-    for i in range(1, len(taken_coords)):
-        empty_coords[i] = (taken_coords[i] + taken_coords[i - 1]) / 2
-    # Convert to number of voxels, these are allowed positions to segment
-    allowed_voxel_breaks_in_material = (empty_coords / voxel_size).astype(int)  
+    empty_coords = (coords[:,0][coord_idx_cuts_lo] + coords[:,0][coord_idx_cuts_hi]) / 2 # take average between lo & hi values elementwise
+    allowed_voxel_breaks_in_material = (empty_coords / voxel_size).astype(int)   
     
     return allowed_voxel_breaks_in_material
 
