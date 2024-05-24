@@ -180,8 +180,6 @@ def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_gri
     Returns:
     - det_ints (numpy.ndarray): A 2D array representing the integrated intensity values on the detector.
     """
-    
-    
     det_ints = np.zeros_like(det_x_grid)
     for row in range(len(v_axis_vals)):
         for col in range(len(h_axis_vals)):
@@ -191,3 +189,33 @@ def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_gri
             det_ints[row, col] = int_voxels[y_idx, x_idx, z_idx]
 
     return det_ints
+
+def rotate_psi_phi_theta(det_x, det_y, det_z, psi, phi, theta):
+    
+    det_x2, det_y2, det_z2 = det_x, det_y, det_z
+    # psi = 0 #rotation in degrees of detector about detector normal axis
+    det_x2, det_y2, det_z2 = rotate_about_normal(det_x2, det_y2, det_z2, psi)
+    # phi = 0 #rotation in degrees of detector about detector vertical axis
+    det_x2, det_y2, det_z2 = rotate_about_vertical(det_x2, det_y2, det_z2, phi)
+    # theta = 0 #rotation in degrees of detector about detector horizontal axis
+    det_x2, det_y2, det_z2 = rotate_about_horizontal(det_x2, det_y2, det_z2, theta)
+    
+    return det_x2, det_y2, det_z2
+    
+def mirror_vertical_horizontal(qmap):
+    """
+    Mirrors the values of a qmap array about the vertical and horizontal axis.
+    origin of qmap must be in the center!
+    
+    Parameters:
+    - qmap (np.ndarray): The qmap array
+
+    Returns:
+    - np.ndarray: The mirrored qmap
+    """
+    # Filter out negative qxy values and their corresponding data in the qmap
+    qmap_rev_lr = np.fliplr(qmap)
+    qmap_rev_ud = np.flipud(qmap)
+    qmap_sum = qmap+qmap_rev_lr+qmap_rev_ud
+    
+    return qmap_sum
