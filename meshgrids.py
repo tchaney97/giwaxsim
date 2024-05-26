@@ -267,7 +267,6 @@ def generate_electron_grid_npys_fixed(xyz_path,
     y_axis = np.linspace(0, grid_vox_y*voxel_size, grid_vox_y)
     z_axis = np.linspace(0, grid_vox_z*voxel_size, grid_vox_z)
 
-
     # Populate grid segments:
     # Sort coordinates & symbols by the x coordinate value (by entering as the last column in np.lexsort)
     ind = np.lexsort((coords[:,2], coords[:,1], coords[:,0]))  # return sorted indices values (first value)
@@ -295,8 +294,8 @@ def generate_electron_grid_npys_fixed(xyz_path,
         for coord, symbol in zip(segment_coords, segment_symbols):
             grid_coord = (coord / voxel_size).astype(int)
             density_grid_segment[ grid_coord[1], 
-                                (grid_coord[0]-(grid_vox_x_segment*segment_num)), 
-                                grid_coord[2]] += (ptable[symbol])
+                                 (grid_coord[0]-(grid_vox_x_segment*segment_num)), 
+                                  grid_coord[2]] += (ptable[symbol])
             
         npy_savename = f'grid_segment_along-x_num-{segment_num}_shape-{grid_vox_y}-{grid_vox_x_segment}-{grid_vox_z}.npy'
         np.save(npySavePath.joinpath(npy_savename), density_grid_segment)
@@ -304,7 +303,9 @@ def generate_electron_grid_npys_fixed(xyz_path,
     return x_axis, y_axis, z_axis, grid_vox_x, grid_vox_y, grid_vox_z
 
 def get_allowed_vox_breaks(sigma, voxel_size, coords, axis):
-    """Find all voxels along axis where there is enough space between point smeared with gaussian"""
+    """
+    Find all voxels along axis where there is enough space between point smeared with gaussian
+    """
     diff_threshold = voxel_size + (3 * sigma)  # Set diff threshold by voxel size + (3*sigma) 
     diff_axis = np.diff(coords, axis=axis)[:, 0]  # Get difference values array
     diff_axis = np.append(diff_axis, 0)  # Add extra zero at the end to make same shape as coords to use as mask
@@ -322,7 +323,9 @@ def get_allowed_vox_breaks(sigma, voxel_size, coords, axis):
     return allowed_voxel_breaks_in_material
 
 def get_flexible_voxel_breaks(segment_vox_size, min_ax_size, allowed_vox_breaks, x_axis):
-    """Based on allowed voxel points, define voxel slices along specified axis"""
+    """
+    Based on allowed voxel points, define voxel slices along specified axis
+    """
     # Target voxel breakpoints (not including 0 & end)
     vox_break_targs = np.arange(segment_vox_size, min_ax_size, segment_vox_size)  
 
