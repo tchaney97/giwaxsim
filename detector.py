@@ -27,8 +27,6 @@ def make_detector(h_max, num_pixels_h, v_max, num_pixels_v):
 
     return det_x_grid, det_y_grid, det_z_grid, h_axis_vals, v_axis_vals
 
-
-
 def rotate_about_normal(det_x_grid, det_y_grid, det_z_grid, psi):
     """
     Rotate the detector about the axis normal to the detector by psi degrees.
