@@ -6,9 +6,10 @@ from scipy.signal import convolve
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
 from tqdm.auto import tqdm
-
+import pathlib
 from utilities import load_xyz, gaussian_kernel
 from ptable_dict import ptable
+import xrft
 
 def generate_density_grid(xyz_path, sigma, voxel_size, min_ax_size=256):
     """
@@ -207,7 +208,6 @@ def generate_electron_grid_npys_fixed(xyz_path,
                                 voxel_size,
                                 segments,
                                 npySavePath,
-                                sigma,
                                 min_ax_size = 256):
     """
     Generates a 3D voxelized electron density grid from .xyz file. Does not apply
@@ -221,8 +221,7 @@ def generate_electron_grid_npys_fixed(xyz_path,
     - voxel_size (float): size of voxels in angstroms
     - segments (int): number of segments to make along x direction, this will 
                       also be used for the chunk sizes in the dask array
-    - npySavePath (pathlib.Path): path to save grid segment npy files
-    - sigma (float): used to shift coords to origin for gaussian smearing later
+    - npySavePath (str or pathlib.Path): path to save grid segment npy files
     - min_ax_size (int): minimum number of voxels to use for grid, if not 
                          exceeded based on coordinate values & voxel size
 
@@ -237,19 +236,23 @@ def generate_electron_grid_npys_fixed(xyz_path,
     Generates:
     - npy files in specified npySavePath folder
     """
+
+    #set pathlib path
+    xyz_path = pathlib.Path(xyz_path)
+    npySavePath = pathlib.Path(npySavePath)
+    
     # Extracting the atomic symbols and positions from the xyz file
     coords, symbols = load_xyz(xyz_path)
 
     # Shift coords array to origin (buffer ensures room for Gaussian smearing)
-    buffer = 3 * sigma # same size as guassian kernel (made later)
-    coords[:,0] -= np.min(coords[:,0])-buffer
-    coords[:,1] -= np.min(coords[:,1])-buffer
-    coords[:,2] -= np.min(coords[:,2])-buffer
+    coords[:,0] -= np.min(coords[:,0])
+    coords[:,1] -= np.min(coords[:,1])
+    coords[:,2] -= np.min(coords[:,2])
 
     # axis grids
-    grid_size_x = int(np.ceil((np.max(coords[:,0])+buffer)/voxel_size))
-    grid_size_y = int(np.ceil((np.max(coords[:,1])+buffer)/voxel_size))
-    grid_size_z = int(np.ceil((np.max(coords[:,2])+buffer)/voxel_size))
+    grid_size_x = int(np.ceil(np.max(coords[:,0])/voxel_size))
+    grid_size_y = int(np.ceil(np.max(coords[:,1])/voxel_size))
+    grid_size_z = int(np.ceil(np.max(coords[:,2])/voxel_size))
 
     #calcuate number of voxel grid points, pad to nearest 2^n
     grid_vox_x = 1 << (grid_size_x - 1).bit_length()
@@ -302,224 +305,8 @@ def generate_electron_grid_npys_fixed(xyz_path,
 
     return x_axis, y_axis, z_axis, grid_vox_x, grid_vox_y, grid_vox_z
 
-def get_allowed_vox_breaks(sigma, voxel_size, coords, axis):
-    """
-    Find all voxels along axis where there is enough space between point smeared with gaussian
-    """
-    diff_threshold = voxel_size + (3 * sigma)  # Set diff threshold by voxel size + (3*sigma) 
-    diff_axis = np.diff(coords, axis=axis)[:, 0]  # Get difference values array
-    diff_axis = np.append(diff_axis, 0)  # Add extra zero at the end to make same shape as coords to use as mask
-    # Find indices with difference value from previous greater than diff threshold 
-    coord_idx_cuts_lo = np.nonzero(diff_axis>diff_threshold)[0]     # Indices on lower side of difference
-    coord_idx_cuts_hi = np.nonzero(diff_axis>diff_threshold)[0] + 1 # Indices on higher side of difference  
-    # Get corresponding coordinat values
-    taken_coords_lo = coords[:,axis][coord_idx_cuts_lo]  
-    taken_coords_hi = coords[:,axis][coord_idx_cuts_hi]  
-
-    # We want to find the halfway point between the taken coords: 
-    empty_coords = (coords[:,0][coord_idx_cuts_lo] + coords[:,0][coord_idx_cuts_hi]) / 2 # take average between lo & hi values elementwise
-    allowed_voxel_breaks_in_material = (empty_coords / voxel_size).astype(int)   
-    
-    return allowed_voxel_breaks_in_material
-
-def get_flexible_voxel_breaks(segment_vox_size, min_ax_size, allowed_vox_breaks, x_axis):
-    """
-    Based on allowed voxel points, define voxel slices along specified axis
-    """
-    # Target voxel breakpoints (not including 0 & end)
-    vox_break_targs = np.arange(segment_vox_size, min_ax_size, segment_vox_size)  
-
-    # Generate actual allowed break points
-    vox_breaks = np.array([0, min_ax_size])  # Add 0 & end first
-    for vox_break_targ in vox_break_targs:
-        if vox_break_targ > allowed_vox_breaks[-1]: 
-            # Target is fine if it is beyond material in voxel space
-            vox_breaks = np.append(vox_breaks, vox_break_targ)
-        else:
-            # Otherwise, look for closest value in allowed voxel breaks
-            vox_break_diffs = np.abs(allowed_vox_breaks - vox_break_targ) 
-            # Pull out closest values, these will likely shift the target values
-            vox_break_shifted = allowed_vox_breaks[vox_break_diffs==vox_break_diffs.min()][0]
-            vox_breaks = np.append(vox_breaks, vox_break_shifted)
-    vox_breaks.sort()  # Put 0 & end in order
-
-    # Reshape breakpoints into tuples of min/max
-    vox_axis_mins = vox_breaks[:-1]
-    vox_axis_maxs = vox_breaks[1:]
-    vox_axis_slices = [(vox_axis_min,vox_axis_max) for vox_axis_min,vox_axis_max in zip(vox_axis_mins,vox_axis_maxs)]
-    x_mins = x_axis[vox_axis_mins]
-    x_maxs = x_axis[vox_axis_maxs[:-1]]
-    x_maxs = np.append(x_maxs, x_axis[-1])
-
-    return vox_axis_slices, x_mins, x_maxs
-
-def flexible_density_grid_npys_along_x(xyz_path,
-                                       npySavePath, 
-                                       voxel_size,
-                                       sigma,
-                                       segment_vox_size,
-                                       min_ax_size = 256):
-    """
-    Generates a 3D voxelized electron density grid from .xyz file. Targeted for 
-    large arrays where memory would be an issue to load the whole array, so 
-    segments along the x direction are saved as npy files and to be reloaded as 
-    a dask object later (already persisted). With a target 'segment_vox_size', 
-    the actual segment voxels will be adjusted to split between atoms.
-    See related functions to segment along y or z dimensions. 
-    
-    Parameters:
-    - xyz_path (str or pathlib.Path): path to xyz file of molecule, NP, etc
-    - npySavePath (pathlib.Path): path to save grid segment npy files
-    - voxel_size (float): size of voxels in angstroms
-    - sigma (float or None): for applying gaussian convolution (and buffer 
-                             voxels). No convolution if sigma==None.
-    - segment_vox_size (int): target number of voxels per numpy segment, these
-                              will be adjusted based on the material input 
-                              and sigma value to segment between atoms
-                              This should be a reasonable value for how much 
-                              RAM your system has. 
-
-                              e.g.: ( 512,  128,  512) floats =  256 MB RAM
-                                    ( 512,  512,  512) floats =  1   GB RAM
-                                    (1024,  128, 1024) floats =  1   GB RAM
-                                    (1024, 1024, 1024) floats =  8   GB RAM
-    - min_ax_size (int): minimum number of voxels to use for grid, if not 
-                         exceeded based on coordinate values & voxel size
-
-    Returns:
-    - x_axis: 1D numpy array of x coordinate values 
-    - y_axis: 1D numpy array of y coordinate values 
-    - z_axis: 1D numpy array of z coordinate values 
-    - grid_vox_x: number of voxels along x direction
-    - grid_vox_y: number of voxels along y direction
-    - grid_vox_z: number of voxels along z direction
-
-    Generates:
-    - npy files in specified npySavePath folder
-    """
-    # Extracting the atomic symbols and positions from the xyz file
-    coords, symbols = load_xyz(xyz_path)
-
-    # Shift coords array to origin (buffer ensures room for Gaussian smearing)
-    buffer = 3 * sigma # same size as guassian kernel (made later)
-    coords[:,0] -= np.min(coords[:,0])-buffer
-    coords[:,1] -= np.min(coords[:,1])-buffer
-    coords[:,2] -= np.min(coords[:,2])-buffer
-
-    # Axis grids
-    grid_size_x = int(np.ceil((np.max(coords[:,0])+buffer)/voxel_size))
-    grid_size_y = int(np.ceil((np.max(coords[:,1])+buffer)/voxel_size))
-    grid_size_z = int(np.ceil((np.max(coords[:,2])+buffer)/voxel_size))
-
-    # Calcuate number of voxel grid points, pad to nearest 2^n
-    grid_vox_x = 1 << (grid_size_x - 1).bit_length()
-    grid_vox_y = 1 << (grid_size_y - 1).bit_length()
-    grid_vox_z = 1 << (grid_size_z - 1).bit_length()
-    if grid_vox_x < min_ax_size:
-        grid_vox_x = min_ax_size
-    if grid_vox_y < min_ax_size:
-        grid_vox_y = min_ax_size
-    if grid_vox_z < min_ax_size:
-        grid_vox_z = min_ax_size
-
-    # Create axes
-    x_axis = np.linspace(0, grid_vox_x*voxel_size, grid_vox_x)
-    y_axis = np.linspace(0, grid_vox_y*voxel_size, grid_vox_y)
-    z_axis = np.linspace(0, grid_vox_z*voxel_size, grid_vox_z)
-
-    # Sort coordinates & symbols by the specifed axis coordinate value (by entering as the last column in np.lexsort)
-    axis = 0  # x values
-    ind = np.lexsort((coords[:,2], coords[:,1], coords[:,0]))
-    symbols = symbols[ind]
-    coords = coords[ind]
-
-    # Find all voxels along axis where there is enough space between point smeared with gaussian
-    allowed_vox_breaks = get_allowed_vox_breaks(sigma, voxel_size, coords, axis)
-
-    # Based on allowed voxel points above, define voxel slices along specified axis
-    vox_axis_slices, x_mins, x_maxs = get_flexible_voxel_breaks(
-                    segment_vox_size, min_ax_size, allowed_vox_breaks, x_axis)
-
-    # Loop over each vox segment to populate
-    grid_vox_segments = np.array([])  # Running total of each segment size
-    for i, vox_axis_slice in enumerate(tqdm(vox_axis_slices, desc='Populating, smearing, & saving segments')):
-        # Get segment size
-        grid_vox_axis_segment = vox_axis_slice[1] - vox_axis_slice[0]
-        # Add segment size to running total
-        grid_vox_segments = np.append(grid_vox_segments, grid_vox_axis_segment)
-        
-        # Create empty grid segment
-        density_grid_segment = np.zeros((grid_vox_y, grid_vox_axis_segment, grid_vox_z))
-        
-        # Find x min & max (real space units)
-        x_min = x_mins[i]
-        x_max = x_maxs[i]
-
-        # Downselect pre-sorted coords & symbols segment to apply to loop
-        segment_coords_mask = (coords[:,axis] >= x_min) & (coords[:,axis] < x_max)
-        segment_coords = coords[segment_coords_mask]
-        segment_symbols = symbols[segment_coords_mask]
-
-        # Populate the grid 
-        for coord, symbol in zip(segment_coords, segment_symbols):
-            grid_coord = np.round((coord / voxel_size),0).astype('int')
-            density_grid_segment[ grid_coord[1], 
-                                 (grid_coord[0]-(int(grid_vox_segments.sum()))),  # shift the grid coord to be relative to segment not global 
-                                  grid_coord[2] ] += (ptable[symbol])  
-            
-        # Create a Gaussian kernel
-        if sigma:
-            sigma_voxel = sigma/voxel_size
-            kernel_size = 6 * sigma_voxel + 1  # Ensure the kernel size covers enough of the Gaussian
-            gaussian_kernel_3d = gaussian_kernel(kernel_size, sigma_voxel)
-            # convolve gaussian with 
-            density_grid_segment = convolve(density_grid_segment, gaussian_kernel_3d, mode='same')
-            
-        npy_savename = f'grid_segment_along-x_sigma-{sigma}_num-{i}_shape-{grid_vox_y}-{grid_vox_axis_segment}-{grid_vox_z}.npy'
-        np.save(npySavePath.joinpath(npy_savename), density_grid_segment)   
-
-    return x_axis, y_axis, z_axis, grid_vox_x, grid_vox_y, grid_vox_z
-
-# # Future functions for npys along y, along z:
-# def flexible_density_grid_npys_along_yz():
-#     # Sort coordinates & symbols by the specifed axis coordinate value (by entering as the last column in np.lexsort)
-#     # Extract int for axis to chunk
-#     # if axis_to_chunk == 'x':
-#     axis = 0
-#     ind = np.lexsort((coords[:,2], coords[:,1], coords[:,0]))
-#     # elif axis_to_chunk == 'y':
-#     #     axis = 1
-#     #     ind = np.lexsort((coords[:,2], coords[:,0], coords[:,1]))
-#     # elif axis_to_chunk == 'z':
-#     #     axis = 2
-#     #     ind = np.lexsort((coords[:,0], coords[:,1], coords[:,2]))    
-#     elif axis_to_chunk=='y':
-#         # density_grid_segment = np.zeros((grid_vox_axis_segment, grid_vox_x, grid_vox_z))
-#         print('not implemented yet')
-#     elif axis_to_chunk=='z':
-#         # density_grid_segment = np.zeros((grid_vox_y, grid_vox_x, grid_vox_axis_segment))
-#         print('not implemented yet')
-
-# # Doesn't yet work... the below commands must be run in notebook
-# def load_array_from_npy_stack(npy_paths):
-#     arrs = []
-#     for npy_path in npy_paths:
-#         arr = np.load(npy_path)
-#         arrs.append(arr)
-
-#     return np.concatenate(arrs, axis=1)   
-
-# def load_npy_files_to_dask(dask, npySavePath, grid_vox_x, grid_vox_y, grid_vox_z):
-#     """
-#     Load npy files back in as a dask array:
-    
-#     Inputs:
-#     - dask: the full dask module, probably a better way to do this...
-#     - npySavePath: pathlib.Path to the npy files
-#     """
-#     npy_paths = sorted(npySavePath.glob('*'))
-#     density_grid = dask.delayed(load_array_from_npy_stack)(npy_paths)
-#     density_grid = dask.array.from_delayed(density_grid, shape=(grid_vox_y, grid_vox_x, grid_vox_z), dtype=float)
-#     density_grid = density_grid.rechunk((grid_vox_y, int(grid_vox_x/8), grid_vox_z))
-
-#     return density_grid.persist()    
+def xrft_fft(DA, num_chunks):
+    fft_yz = xrft.fft(DA, dim=['y','z'], shift=True)  # take dft in y & z direction
+    fft_yz_rechunked = fft_yz.chunk({'freq_y':int(len(DA.y))/num_chunks,'x':int(len(DA.x))})  # rechunk along y direction 
+    fft_all = xrft.fft(fft_yz_rechunked, dim=['x'], shift=True)  # take dft in x direction
+    return fft_all

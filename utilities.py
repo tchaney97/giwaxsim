@@ -3,7 +3,7 @@ import numpy as np
 def load_xyz(xyz_path):
     """
     Parameters:
-    - xyz_path: string, path to xyz file of molecule, NP, etc
+    - xyz_path: (str or pathlib.Path), path to xyz file of molecule, NP, etc
 
     Returns:
     -coords: 2D numpy array of x,y,z coordinates
@@ -26,7 +26,7 @@ def write_xyz(output_path, coords, elements):
     Writes the molecular structure to an xyz file at the specified path.
     
     Parameters:
-    - output_path: string, path where the xyz file will be saved
+    - output_path: (str or pathlib.Path), path where the xyz file will be saved
     - coords: 2D numpy array of x, y, z coordinates
     - elements: 1D numpy array of element symbols corresponding to each row in coords
     """
@@ -70,9 +70,21 @@ def rotation_matrix(u,theta):
     return R
 
 def gaussian_kernel(size, sigma=1):
-    """ Returns a normalized 3D gauss kernel array for convolutions """
+    """ 
+    Returns a normalized 3D gauss kernel array for convolutions
+    see https://math.stackexchange.com/questions/434629/3-d-generalization-of-the-gaussian-point-spread-function
+    
+    """
     size = int(size) // 2
     x, y, z = np.mgrid[-size:size+1, -size:size+1, -size:size+1]
-    g = np.exp(-(x**2 + y**2 + z**2) / (2 * sigma**2))
+    C = 1/(sigma**3 * (2*np.pi)**(3/2))
+    g = C*np.exp(-(x**2 + y**2 + z**2) / (2 * sigma**2))
     
-    return g / g.sum()
+    return g
+
+def load_array_from_npy_stack(npy_paths):
+    arrs = []
+    for npy_path in npy_paths:
+        arr = np.load(npy_path)
+        arrs.append(arr)
+    return np.concatenate(arrs, axis=1)
