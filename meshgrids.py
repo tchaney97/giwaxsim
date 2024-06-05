@@ -198,3 +198,38 @@ def plot_3D_grid(density_grid, x_axis, y_axis, z_axis, cmap, threshold_pct=98, n
     ax.zaxis.pane.set_edgecolor('white')
     ax.grid(color='white', linestyle='--', linewidth=0.5)
     plt.show()
+
+def downselect_meshgrid(grid, x_axis, y_axis, z_axis, max_val):
+    """
+    selects a cube portion of meshgrid centered about origin containing all voxels within 
+    max_val in each cartesian direction
+
+    Parameters:
+    - grid: A 3D numpy array to be downselected with indices (y,x,z)
+    - x_axis: 1D array of x coordinate values 
+    - y_axis: 1D array of y coordinate values 
+    - z_axis: 1D array of z coordinate values 
+    - max_val: Maximum value for the selection range in each Cartesian direction
+
+
+    Returns:
+    - small_grid: a 3D numpy array with indices (y,x,z)
+    - x_axis2: 1D array of x coordinate values 
+    - y_axis2: 1D array of y coordinate values 
+    - z_axis2: 1D array of z coordinate values 
+    """
+    #add one voxel buffer to ensure max_val is contained in selection
+    voxel_size = np.abs(x_axis[1]-x_axis[0])
+    max_val += voxel_size
+
+    x_idxs = np.where(np.abs(x_axis)<max_val)[0]
+    y_idxs = np.where(np.abs(y_axis)<max_val)[0]
+    z_idxs = np.where(np.abs(z_axis)<max_val)[0]
+
+    small_grid = grid[y_idxs[0]:y_idxs[-1]+1, x_idxs[0]:x_idxs[-1]+1, z_idxs[0]:z_idxs[-1]+1]
+    x_axis2 = x_axis[x_idxs[0]:x_idxs[-1]+1]
+    y_axis2 = y_axis[y_idxs[0]:y_idxs[-1]+1]
+    z_axis2 = z_axis[z_idxs[0]:z_idxs[-1]+1]
+
+    return small_grid, x_axis2, y_axis2, z_axis2
+

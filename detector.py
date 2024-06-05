@@ -219,3 +219,21 @@ def mirror_vertical_horizontal(qmap):
     qmap_sum = qmap+qmap_rev_lr+qmap_rev_ud
     
     return qmap_sum
+
+def generate_detector_ints(args):
+    """
+    function to generate and save detector intensity.
+    Used to map onto many workers with multiprocess(ing) Pool
+
+    input:
+    - args: iq,qx,qy,qz,det_h,det_v,det_x,det_y,det_z,psi,phi,theta,save_path
+
+    output:
+    - filename: string
+    """
+    iq,qx,qy,qz,det_h,det_v,det_x,det_y,det_z,psi,phi,theta,save_path = args
+    det_x2, det_y2, det_z2 = rotate_psi_phi_theta(det_x, det_y, det_z, psi, phi, theta)
+    det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2, det_h, det_v)
+    filename = f'{save_path}det_ints_psi{psi:.0f}_phi{phi:.0f}.npy'
+    np.save(filename, det_int)
+    return filename
