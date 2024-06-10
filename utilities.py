@@ -70,9 +70,30 @@ def rotation_matrix(u,theta):
     return R
 
 def gaussian_kernel(size, sigma=1):
-    """ Returns a normalized 3D gauss kernel array for convolutions """
+    """ 
+    Returns a normalized 3D gauss kernel array for convolutions
+    see https://math.stackexchange.com/questions/434629/3-d-generalization-of-the-gaussian-point-spread-function
+    
+    """
     size = int(size) // 2
     x, y, z = np.mgrid[-size:size+1, -size:size+1, -size:size+1]
-    g = np.exp(-(x**2 + y**2 + z**2) / (2 * sigma**2))
+    C = 1/(sigma**3 * (2*np.pi)**(3/2))
+    g = C*np.exp(-(x**2 + y**2 + z**2) / (2 * sigma**2))
     
-    return g / g.sum()
+    return g, size
+
+def fft_gaussian(qx_axis, qy_axis, qz_axis, sigma):
+    """
+    Returns the fft of a gaussian in 3D q-space.
+
+    inputs:
+    - qx_axis: 1D numpy array of qx axis values
+    - qy_axis: 1D numpy array of qy axis values
+    - qz_axis: 1D numpy array of qz axis values
+    - sigma: realspace sigma value for gaussian
+    """
+    sigma *= 1/(2*np.pi)
+    qx, qy, qz = np.meshgrid(qx_axis, qy_axis, qz_axis)
+    g_fft = np.exp(-2*np.pi**2*sigma**2 * (qx**2 + qy**2 + qz**2))
+    
+    return g_fft

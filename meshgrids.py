@@ -6,17 +6,22 @@ from scipy.signal import convolve
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
 
-from utilities import load_xyz, gaussian_kernel
+from utilities import load_xyz, fft_gaussian
 from ptable_dict import ptable
 
-def generate_density_grid(xyz_path, sigma, voxel_size, min_ax_size=256):
+def generate_density_grid(xyz_path, buffer, voxel_size, min_ax_size=256, bkg_edens=True):
     """
-    Generates a 3D voxelized electron density grid from .xyz file. electron density is 
-    smeared using gaussian convolution with width sigma. Smearing is skipped if sigma=0 
+    Generates a 3D voxelized electron density grid from .xyz file. 
+    A average electron density is optionally applied outside of the smallest
+    bounding cube for the coordinates in xyz path
     
     Parameters:
     - xyz_path: string, path to xyz file of molecule, NP, etc
-    - sigma: peak width where FWHM=2 sqrt(2ln(2))sigma. Set to 0 for no smearing
+    - buffer: value which points will be buffered from box boundaries
+    - voxel_size: real-space dimension for voxel side length
+    - min_ax_size: minimum axis size, axis sizes are set to 2^n for fft efficiency
+    - bkg_edens: boolean if you would like bkg_edens applied (helps reduce kiessig fringes)
+    
 
     Returns:
     - density_grid: 3D meshgrid of electron density values
@@ -24,12 +29,12 @@ def generate_density_grid(xyz_path, sigma, voxel_size, min_ax_size=256):
     - y_axis: 1D array of y coordinate values 
     - z_axis: 1D array of z coordinate values 
     """
+
     # Extracting the atomic symbols and positions from the xyz file
     coords, symbols = load_xyz(xyz_path)
 
     # Shift coords array to origin (buffer ensures room for Gaussian smearing)
     coords = np.array(coords)
-    buffer = 3 * sigma # same size as guassian kernel (made later)
     coords[:,0] -= np.min(coords[:,0])-buffer
     coords[:,1] -= np.min(coords[:,1])-buffer
     coords[:,2] -= np.min(coords[:,2])-buffer
@@ -62,19 +67,33 @@ def generate_density_grid(xyz_path, sigma, voxel_size, min_ax_size=256):
     # Populate the grid
     for coord, symbol in zip(coords, symbols):
         grid_coord = (coord / voxel_size).astype(int)
-        density_grid[grid_coord[1], grid_coord[0], grid_coord[2]] += (ptable[symbol])*voxel_size**3
+        density_grid[grid_coord[1], grid_coord[0], grid_coord[2]] += (ptable[symbol])
+
+    #apply bkg electron density
+    if bkg_edens:
+        # Define bounds in voxel coordinates
+        x_bound = np.max(coords[:,0])+buffer
+        y_bound = np.max(coords[:,1])+buffer
+        z_bound = np.max(coords[:,2])+buffer
+        x_bound_vox = int(x_bound / voxel_size)
+        y_bound_vox = int(y_bound / voxel_size)
+        z_bound_vox = int(z_bound / voxel_size)
+        
+        # Calculate average electron density within the bounds
+        within_bounds = density_grid[:y_bound_vox, :x_bound_vox, :z_bound_vox]
+        average_density = np.mean(within_bounds)
+        print(average_density)
     
-    # Create a Gaussian kernel
-    if sigma:
-        sigma_voxel = sigma/voxel_size
-        kernel_size = 6 * sigma_voxel + 1  # Ensure the kernel size covers enough of the Gaussian
-        gaussian_kernel_3d = gaussian_kernel(kernel_size, sigma_voxel)
-        # convolve gaussian with 
-        density_grid = convolve(density_grid, gaussian_kernel_3d, mode='same')
+        # Fill voxels outside of bounds with average electron density value
+        density_grid[y_bound_vox:, :, :] = average_density
+        density_grid[:, x_bound_vox:, :] = average_density
+        density_grid[:, :, z_bound_vox:] = average_density
+        
 
     return density_grid, x_axis, y_axis, z_axis
 
-def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis):
+
+def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis, sigma=0):
     """
     Generates a 3D voxelized scattering intensity grid from input electron density grid.
     Scattering is given as norm**2 of fft and new qmesh axes
@@ -108,11 +127,17 @@ def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis):
     # Compute the Fourier transform of the density grid
     ft_density = fftn(density_grid)
     ft_density_shifted = fftshift(ft_density)  # Shift the zero-frequency component to the center of the spectrum
+
+    #smear q-space if sigma is not 0
+    if sigma:
+        g_fft = fft_gaussian(qx_shifted, qy_shifted, qz_shifted, sigma)
+        ft_density_shifted *= g_fft
     
     # Magnitude squared of the Fourier transform for scattering intensity I(q)
     iq = np.abs(ft_density_shifted)**2
 
     return iq, qx_shifted, qy_shifted, qz_shifted
+
 
 def plot_3D_grid(density_grid, x_axis, y_axis, z_axis, cmap, threshold_pct=98, num_levels=10, log=True):
     """
