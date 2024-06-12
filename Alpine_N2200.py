@@ -11,25 +11,20 @@ import os
 
 from ptable_dict import ptable, atomic_masses
 from utilities import write_xyz, load_xyz, rotation_matrix, gaussian_kernel
-from meshgrids import generate_density_grid, convert_grid_qspace, plot_3D_grid, downselect_meshgrid
+from meshgrids import generate_density_grid, convert_grid_qspace, plot_3D_grid, downselect_meshgrid, multiply_ft_gaussian
 from detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
 from detector import intersect_detector, rotate_psi_phi_theta, mirror_vertical_horizontal, generate_detector_ints
 
 dirr = '/projects/thch7683/giwaxs_sim_n2200/'
 xyz_path = f'{dirr}xyz_files/rectangular_N2200_test2.xyz'
 buffer_val = 0.5
-voxel_size = 0.25
+voxel_size = 0.3
 dens_grid, x_axis, y_axis, z_axis = generate_density_grid(xyz_path, buffer_val, voxel_size, min_ax_size=1500)
 
 iq, qx, qy, qz = convert_grid_qspace(dens_grid, x_axis, y_axis, z_axis)
 
 #free up memory
 del dens_grid
-
-np.save(f'{dirr}n2200_sim1_iq.npy', iq)
-np.save(f'{dirr}n2200_sim1_qx.npy', qx)
-np.save(f'{dirr}n2200_sim1_qy.npy', qy)
-np.save(f'{dirr}n2200_sim1_qz.npy', qz)
 
 # optional downselect iq meshgrid based on max q desired
 max_q = 2.5
@@ -43,6 +38,15 @@ iq = iq_small
 qx = qx_small
 qy = qy_small
 qz = qz_small
+
+#apply debye waller real-space gaussian smearing
+sigma = 0.2
+iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma)
+
+np.save(f'{dirr}n2200_sim1_iq.npy', iq)
+np.save(f'{dirr}n2200_sim1_qx.npy', qx)
+np.save(f'{dirr}n2200_sim1_qy.npy', qy)
+np.save(f'{dirr}n2200_sim1_qz.npy', qz)
 
 save_path = f'{dirr}det_output_files/'
 if not os.path.exists(save_path):

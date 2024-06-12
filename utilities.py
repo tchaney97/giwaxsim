@@ -1,4 +1,9 @@
 import numpy as np
+import re
+
+def strip_numbers(element):
+        match = re.match(r"([a-zA-Z]+)", element)
+        return match.group(1) if match else element
 
 def load_xyz(xyz_path):
     """
@@ -14,7 +19,7 @@ def load_xyz(xyz_path):
         lines = file.readlines()
     # Extracting atom data
     atom_data = [line.split() for line in lines[2:] if len(line.split()) == 4]
-    symbols, coords = zip(*[(parts[0], np.array(list(map(float, parts[1:])))) for parts in atom_data])
+    symbols, coords = zip(*[(strip_numbers(parts[0]), np.array(list(map(float, parts[1:])))) for parts in atom_data])
 
     coords = np.array(coords)
     elements = np.array(symbols)

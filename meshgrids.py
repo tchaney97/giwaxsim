@@ -93,7 +93,7 @@ def generate_density_grid(xyz_path, buffer, voxel_size, min_ax_size=256, bkg_ede
     return density_grid, x_axis, y_axis, z_axis
 
 
-def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis, sigma=0):
+def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis):
     """
     Generates a 3D voxelized scattering intensity grid from input electron density grid.
     Scattering is given as norm**2 of fft and new qmesh axes
@@ -105,7 +105,7 @@ def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis, sigma=0):
     - z_axis: 1D array of z coordinate values 
 
     Returns:
-    - iq: 3D meshgrid of scattering intensity values
+    - iq: 3D meshgrid of scattering complex values
     - qx_axis: 1D array of qx coordinate values 
     - qy_axis: 1D array of qy coordinate values 
     - qz_axis: 1D array of qz coordinate values 
@@ -127,16 +127,29 @@ def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis, sigma=0):
     # Compute the Fourier transform of the density grid
     ft_density = fftn(density_grid)
     ft_density_shifted = fftshift(ft_density)  # Shift the zero-frequency component to the center of the spectrum
-
-    #smear q-space if sigma is not 0
-    if sigma:
-        g_fft = fft_gaussian(qx_shifted, qy_shifted, qz_shifted, sigma)
-        ft_density_shifted *= g_fft
     
     # Magnitude squared of the Fourier transform for scattering intensity I(q)
     iq = np.abs(ft_density_shifted)**2
 
     return iq, qx_shifted, qy_shifted, qz_shifted
+
+def multiply_ft_gaussian(grid, x_axis, y_axis, z_axis, sigma):
+    """
+    Multiplies a 3D meshgrid by a fourier transformed gaussian.
+    This is used as an efficient way to apply real-space guassian
+    distribution to atoms (i.e. debye waller factor)
+
+    Parameters:
+    - grid (np.ndarray): 3D numpy array representing q-space meshgrid
+    - x_axis (np.ndarrar): 1D numpy array representing qx axis of meshgrid
+    - y_axis (np.ndarrar): 1D numpy array representing qy axis of meshgrid
+    - z_axis (np.ndarrar): 1D numpy array representing qz axis of meshgrid
+    - sigma (float): sigma value for real-space guassian (debye-waller)
+    """
+    g_fft = fft_gaussian(x_axis, y_axis, z_axis, sigma)
+    grid_smeared = grid * g_fft**2
+
+    return grid_smeared
 
 
 def plot_3D_grid(density_grid, x_axis, y_axis, z_axis, cmap, threshold_pct=98, num_levels=10, log=True):
