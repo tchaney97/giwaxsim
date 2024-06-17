@@ -1,5 +1,7 @@
+from ptable_dict import aff_dict, ptable
 import numpy as np
 import re
+    
 
 def strip_numbers(element):
         match = re.match(r"([a-zA-Z]+)", element)

@@ -3,6 +3,7 @@ import matplotlib.cm as cm
 import fabio
 import numpy as np
 from scipy.interpolate import griddata
+from ptable_dict import ptable, aff_dict
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -40,6 +41,22 @@ def normalize_qmap(qmap1, qmap2):
     qmap1_max = np.nansum(qmap1)
     qmap2_max = np.nansum(qmap2)
     qmap_out = qmap1 * (qmap2_max/qmap1_max)
+    
+    return qmap_out
+
+def normalize_qmap_position(qmap1, qmap2, qxy_axis, qz_axis, qxy_pos, qz_pos):
+    """
+    Scales the intensity of qmap1 at selected position to equal qmap2
+    qmaps must share same qxy and qz axes
+    """
+
+    qxy_idx = np.argmin(np.abs(qxy_axis-qxy_pos))
+    qz_idx = np.argmin(np.abs(qz_axis-qz_pos))
+    qmap1_int = qmap1[qz_idx, qxy_idx]
+    qmap2_int = qmap2[qz_idx, qxy_idx]
+    qmap_out = qmap1 * (qmap2_int/qmap1_int)
+
+    print(f'qxy_idx={qxy_idx}, qz_idx={qz_idx}, qmap1_int={qmap1_int}, qmap2_int={qmap2_int}')
     
     return qmap_out
 
@@ -88,7 +105,7 @@ def mask_forbidden_pixels(image, qxy, qz, alpha_i_deg, energy):
     
     return masked_image
 
-def rebin_and_combine_qmaps(qmap1, qxy1, qz1, qmap2, qxy2, qz2):
+def rebin_and_combine_qmaps(qmap1, qxy1, qz1, qmap2, qxy2, qz2, pos=0):
     """
     Rebins qmap2 to match the dimensions of qmap1, then combines them into
     a single qmap with qmap1 on the left and qmap2 on the right, split down qxy=0.
@@ -100,6 +117,7 @@ def rebin_and_combine_qmaps(qmap1, qxy1, qz1, qmap2, qxy2, qz2):
     - qmap2 (np.ndarray): The second qmap array to be rebinned and combined.
     - qxy2 (np.ndarray): qxy axis values for the second qmap.
     - qz2 (np.ndarray): qz axis values for the second qmap.
+    - pos (tuple or 0): add tuple of qxy and qz coordinates from qmap1 to normalize to
 
     Returns:
     - np.ndarray: The combined qmap with qmap1 on the left and rebinned qmap2 on the right.
@@ -117,8 +135,12 @@ def rebin_and_combine_qmaps(qmap1, qxy1, qz1, qmap2, qxy2, qz2):
 
     # Interpolate qmap2 onto the grid defined by qmap1
     qmap2_rebinned = griddata(points2, values2, (grid1_x, grid1_z), method='linear')
-    qmap2_rebinned_norm = qmap2_rebinned*(np.nanpercentile(qmap1, 15)/np.nanpercentile(qmap2_rebinned, 75))
-    # qmap2_rebinned_norm = normalize_qmap(qmap2_rebinned, qmap1)
+   
+    if pos:
+        qmap2_rebinned_norm = normalize_qmap_position(qmap2_rebinned, qmap1, qxy1, qz1, pos[0], pos[1])
+    else:
+         qmap2_rebinned_norm = qmap2_rebinned*(np.nanpercentile(qmap1, 15)/np.nanpercentile(qmap2_rebinned, 75))
+        # qmap2_rebinned_norm = normalize_qmap(qmap2_rebinned, qmap1)
 
     # Combine the qmaps
     # Find the index of qxy=0 in qxy1
@@ -157,3 +179,29 @@ def mirror_qmap_positive_qxy_only(qmap, qxy, qz):
     qmap_mirrored = np.concatenate((qmap_positive[:, ::-1], qmap_positive), axis=1)
     
     return qmap_mirrored, qxy_mirrored, qz
+
+def add_f0_q_dependence(det_img, det_h, det_v, element):
+    """
+    
+    parameters:
+    - det_img (np.ndarray): 2D GIWAXS image array to be masked.
+    - det_h (np.ndarray): 1D array of qxy values in 1/Å units (horizontal axis of det_img).
+    - det_v (np.ndarray): 1D array of qz values in 1/Å units (vertical axis of det_img).
+    - element: (str) elemental symbol, some ionic species accepted ex: Li or Li1+
+    """
+    det_img_new = det_img
+    for i, qz in enumerate(det_v):
+        for j, qxy in enumerate(det_h):
+            q = np.sqrt(qxy**2 + qz**2)
+            aff = aff_dict[element]
+            # table 6.1.1.4 from https://it.iucr.org/Cb/ch6o1v0001/ 
+            fq=aff[0]*np.exp(-aff[1]*(q**2)/(16*np.pi**2))
+            fq+=aff[2]*np.exp(-aff[3]*(q**2)/(16*np.pi**2))
+            fq+=aff[4]*np.exp(-aff[5]*(q**2)/(16*np.pi**2))
+            fq+=aff[6]*np.exp(-aff[7]*(q**2)/(16*np.pi**2))
+            fq+=aff[8]
+
+            fq_norm = fq/ptable[element]
+            det_img_new[i,j]*=fq_norm
+            
+    return det_img_new
