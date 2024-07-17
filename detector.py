@@ -213,12 +213,26 @@ def mirror_vertical_horizontal(qmap):
     Returns:
     - np.ndarray: The mirrored qmap
     """
-    # Filter out negative qxy values and their corresponding data in the qmap
-    qmap_rev_lr = np.fliplr(qmap)
-    qmap_rev_ud = np.flipud(qmap)
-    qmap_sum = qmap+qmap_rev_lr+qmap_rev_ud
+    qmap_lr = np.fliplr(qmap)
+    qmap_ud = np.flipud(qmap)
+    qmap_ud_lr = np.fliplr(qmap_ud)
+    qmap_sum = qmap + qmap_lr + qmap_ud + qmap_ud_lr
     
-    return qmap_sum
+    # Handle the central row if the number of rows is odd
+    if qmap.shape[0] % 2 != 0:
+        new_row = qmap[qmap.shape[0]//2,:] + qmap[qmap.shape[0]//2,:][::-1]
+        qmap_sum[qmap.shape[0] // 2, :] = new_row*2
+    
+    # Handle the central column if the number of columns is odd
+    if qmap.shape[1] % 2 != 0:
+        new_col = qmap[:,qmap.shape[1]//2] + qmap[:,qmap.shape[1]//2][::-1]
+        qmap_sum[:, qmap.shape[1] // 2] = new_col*2
+    
+    if qmap.shape[1] % 2 != 0 and qmap.shape[0] % 2 != 0:
+        qmap_sum[qmap.shape[0]//2, qmap.shape[1]//2]=qmap[qmap.shape[0]//2, qmap.shape[1]//2]*4
+
+    return qmap_sum/4
+
 
 def generate_detector_ints(args):
     """
