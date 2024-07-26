@@ -205,3 +205,4 @@ def add_f0_q_dependence(det_img, det_h, det_v, element):
             det_img_new[i,j]*=fq_norm
             
     return det_img_new
+

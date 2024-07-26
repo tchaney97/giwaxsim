@@ -6,9 +6,9 @@ from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
 
 from utilities import load_xyz, fft_gaussian
-from ptable_dict import ptable
+from ptable_dict import ptable, aff_dict
 
-def generate_density_grid(xyz_path, buffer, voxel_size, min_ax_size=256, bkg_edens=True):
+def generate_density_grid(xyz_path, voxel_size, min_ax_size=256, bkg_edens=True):
     """
     Generates a 3D voxelized electron density grid from .xyz file. 
     A average electron density is optionally applied outside of the smallest
@@ -16,7 +16,6 @@ def generate_density_grid(xyz_path, buffer, voxel_size, min_ax_size=256, bkg_ede
     
     Parameters:
     - xyz_path: string, path to xyz file of molecule, NP, etc
-    - buffer: value which points will be buffered from box boundaries
     - voxel_size: real-space dimension for voxel side length
     - min_ax_size: minimum axis size, axis sizes are set to 2^n for fft efficiency
     - bkg_edens: boolean if you would like bkg_edens applied (helps reduce kiessig fringes)
@@ -32,16 +31,16 @@ def generate_density_grid(xyz_path, buffer, voxel_size, min_ax_size=256, bkg_ede
     # Extracting the atomic symbols and positions from the xyz file
     coords, symbols = load_xyz(xyz_path)
 
-    # Shift coords array to origin (buffer ensures room for Gaussian smearing)
+    # Shift coords array to origin
     coords = np.array(coords)
-    coords[:,0] -= np.min(coords[:,0])-buffer
-    coords[:,1] -= np.min(coords[:,1])-buffer
-    coords[:,2] -= np.min(coords[:,2])-buffer
+    coords[:,0] -= np.min(coords[:,0])
+    coords[:,1] -= np.min(coords[:,1])
+    coords[:,2] -= np.min(coords[:,2])
 
     # axis grids
-    grid_size_x = int(np.ceil((np.max(coords[:,0])+buffer)/voxel_size))
-    grid_size_y = int(np.ceil((np.max(coords[:,1])+buffer)/voxel_size))
-    grid_size_z = int(np.ceil((np.max(coords[:,2])+buffer)/voxel_size))
+    grid_size_x = int(np.ceil((np.max(coords[:,0]))/voxel_size))
+    grid_size_y = int(np.ceil((np.max(coords[:,1]))/voxel_size))
+    grid_size_z = int(np.ceil((np.max(coords[:,2]))/voxel_size))
 
     #calcuate number of voxel grid points, pad to nearest 2^n
     grid_vox_x = 1 << (grid_size_x - 1).bit_length()
@@ -71,9 +70,9 @@ def generate_density_grid(xyz_path, buffer, voxel_size, min_ax_size=256, bkg_ede
     #apply bkg electron density
     if bkg_edens:
         # Define bounds in voxel coordinates
-        x_bound = np.max(coords[:,0])+buffer
-        y_bound = np.max(coords[:,1])+buffer
-        z_bound = np.max(coords[:,2])+buffer
+        x_bound = np.max(coords[:,0])
+        y_bound = np.max(coords[:,1])
+        z_bound = np.max(coords[:,2])
         x_bound_vox = int(x_bound / voxel_size)
         y_bound_vox = int(y_bound / voxel_size)
         z_bound_vox = int(z_bound / voxel_size)
@@ -270,3 +269,33 @@ def downselect_meshgrid(grid, x_axis, y_axis, z_axis, max_val):
 
     return small_grid, x_axis2, y_axis2, z_axis2
 
+def add_f0_q_3d(iq, qx_axis, qy_axis, qz_axis, element):
+    """
+    Adds normalized f0(q)^2 dependence onto a reciprocal space scattering intensity map
+    parameters:
+    - iq: 3D voxel grid of scattering complex values
+    - qx_axis: 1D array of qx coordinate values 
+    - qy_axis: 1D array of qy coordinate values 
+    - qz_axis: 1D array of qz coordinate values 
+    - element: (str) elemental symbol
+    """
+    iq_new = np.copy(iq)
+    Z = ptable[element]
+    aff = aff_dict[element]
+    
+    for i, qy in enumerate(qy_axis):
+        for j, qx in enumerate(qx_axis):
+            for k, qz in enumerate(qz_axis):
+                q = np.sqrt(qx**2 + qy**2 + qz**2)
+                # table 6.1.1.4 from https://it.iucr.org/Cb/ch6o1v0001/ 
+                fq = (
+                    aff[0]*np.exp(-aff[1]*(q**2)/(16*np.pi**2))+
+                    aff[2]*np.exp(-aff[3]*(q**2)/(16*np.pi**2))+
+                    aff[4]*np.exp(-aff[5]*(q**2)/(16*np.pi**2))+
+                    aff[6]*np.exp(-aff[7]*(q**2)/(16*np.pi**2))+
+                    aff[8])
+                
+                fq_norm = (fq/Z)**2
+                iq_new[i,j,k]*=fq_norm
+            
+    return iq_new

@@ -13,14 +13,13 @@ def main(config):
     # Input Parameters
     xyz_path = config.get('xyz_path')
     gen_name = config.get('gen_name')
-    buffer_val = float(config.get('buffer_val', 0.5))
     voxel_size = float(config.get('voxel_size', 0.3))
     min_ax_size = int(config.get('min_ax_size', 512))
-    sigma = float(config.get('sigma', 0.2))
+    sigma = float(config.get('f0_element', 'C'))
     max_q = float(config.get('max_q', 2.5))
     output_dir = config.get('output_dir', os.getcwd())
     
-    dens_grid, x_axis, y_axis, z_axis = generate_density_grid(xyz_path, buffer_val, voxel_size, min_ax_size=min_ax_size)
+    dens_grid, x_axis, y_axis, z_axis = generate_density_grid(xyz_path, voxel_size, min_ax_size=min_ax_size)
 
     iq, qx, qy, qz = convert_grid_qspace(dens_grid, x_axis, y_axis, z_axis)
 
@@ -45,8 +44,13 @@ def main(config):
     qy = qy_small
     qz = qz_small
 
+    # using f0 scaling instead, this may be useful for some though
     # Apply real-space Gaussian smearing
-    iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma)
+    # iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma)
+
+    # apply (f0(q)/z)**2 scaling to scatting intensity values
+    iq = add_f0_q_3d(iq, qx, qy, qz, element)
+
 
     # Save
     save_path = f'{output_dir}/{gen_name}_output_files/'
