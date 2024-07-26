@@ -1,0 +1,7 @@
+xyz_path=./test_xyz_files/graphite_medium.xyz
+gen_name=test
+buffer_val=0.5
+voxel_size=0.3
+min_ax_size=512
+sigma=0.2
+max_q=2.5

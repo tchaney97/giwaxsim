@@ -231,7 +231,7 @@ def mirror_vertical_horizontal(qmap):
     if qmap.shape[1] % 2 != 0 and qmap.shape[0] % 2 != 0:
         qmap_sum[qmap.shape[0]//2, qmap.shape[1]//2]=qmap[qmap.shape[0]//2, qmap.shape[1]//2]*4
 
-    return qmap_sum/4
+    return qmap_sum
 
 
 def generate_detector_ints(args):

@@ -1,7 +1,15 @@
 from ptable_dict import aff_dict, ptable
 import numpy as np
 import re
-    
+
+def parse_config_file(file_path):
+    config = {}
+    with open(file_path, 'r') as f:
+        for line in f:
+            if '=' in line:
+                key, value = line.strip().split('=', 1)
+                config[key] = value
+    return config
 
 def strip_numbers(element):
         match = re.match(r"([a-zA-Z]+)", element)
@@ -104,3 +112,30 @@ def fft_gaussian(qx_axis, qy_axis, qz_axis, sigma):
     g_fft = np.exp(-2*np.pi**2*sigma**2 * (qx**2 + qy**2 + qz**2))
     
     return g_fft
+
+def calc_real_space_abc(a_mag, b_mag, c_mag, alpha_deg, beta_deg, gamma_deg):
+    '''
+    https://www.ucl.ac.uk/~rmhajc0/frorth.pdf
+    '''
+    alpha = np.deg2rad(alpha_deg)
+    beta = np.deg2rad(beta_deg)
+    gamma = np.deg2rad(gamma_deg)
+    
+    V = a_mag*b_mag*c_mag*np.sqrt(1-np.cos(alpha)**2-np.cos(beta)**2-np.cos(gamma)**2+2*np.cos(alpha)*np.cos(beta)*np.cos(gamma)) 
+    
+    ax = a_mag
+    ay = 0
+    az = 0
+    a = np.array([ax, ay, az])
+    
+    bx = b_mag*np.cos(gamma)
+    by = b_mag*np.sin(gamma)
+    bz = 0
+    b = np.array([bx, by, bz])
+    
+    cx = c_mag*np.cos(beta)
+    cy = c_mag*(np.cos(alpha)-np.cos(beta)*np.cos(gamma))/(np.sin(gamma))
+    cz = V/(a_mag*b_mag*np.sin(gamma))
+    c = np.array([cx, cy, cz])
+    
+    return a, b, c
