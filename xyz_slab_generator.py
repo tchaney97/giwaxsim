@@ -6,8 +6,8 @@ from utilities import write_xyz, load_xyz, calc_real_space_abc
 
 def main(config):
     # Inputs
-    output_folder = config.get('output_folder')
     input_filepath = config.get('input_filepath')
+    output_folder = config.get('output_folder', os.path.basename(input_filepath))
     gen_name = config.get('gen_name')
     x_size = config.get('x_size')
     y_size = config.get('y_size')
