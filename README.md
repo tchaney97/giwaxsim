@@ -1,5 +1,5 @@
 # giwaxs_forward_sim
-### please read the instruction manual pdf for full usage details
+### please read the [instruction manual](giwaxs_forward_sim_manual.pdf) pdf for full usage details 
 
 ### this tool is intented to simulate GIWAXS given a simulated or hypothesized structure. The input is a .xyz file of atomic symbols and positions (cartesian 3D). First a voxel grid of electron density is constructed based on these atomic positions and number of electrons per atom.
 
