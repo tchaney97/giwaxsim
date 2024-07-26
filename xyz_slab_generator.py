@@ -6,8 +6,8 @@ from utilities import write_xyz, load_xyz, calc_real_space_abc
 
 def main(config):
     # Inputs
-    iq_output_filepath = config.get('iq_output_filepath')
-    filepath = config.get('filepath')
+    output_folder = config.get('output_folder')
+    input_filepath = config.get('input_filepath')
     gen_name = config.get('gen_name')
     x_size = config.get('x_size')
     y_size = config.get('y_size')
@@ -20,8 +20,8 @@ def main(config):
     gamma = config.get('gamma')
     
     
-    base_dir = os.path.basename(filepath)
-    coords, elements = load_xyz(filepath)
+    base_dir = os.path.basename(input_filepath)
+    coords, elements = load_xyz(input_filepath)
     
     a_vect, b_vect, c_vect = calc_real_space_abc(a, b, c, alpha, beta, gamma)
     num_x = int(np.ceil(2*x_size/a_vect[0]))
@@ -104,7 +104,7 @@ def main(config):
     coords_new = coords[mask]
     elements_new = elements[mask]
     
-    save_path = f'{base_dir}{name}_rect_cut{x_size}x{y_size}x{z_size}.xyz'
+    save_path = f'{output_folder}{gen_name}_rect_cut{x_size}x{y_size}x{z_size}.xyz'
     write_xyz(save_path, coords_new, elements_new)
 
 if __name__ == "__main__":

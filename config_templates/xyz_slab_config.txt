@@ -1,0 +1,12 @@
+
+input_filepath=./test_xyz_files/graphite_UnitCell.xyz
+gen_name=graphite
+x_size=100
+y_size=25
+z_size=100
+a=2.456
+b=4.254
+c=6.696
+alpha=90
+beta=90
+gamma=90
