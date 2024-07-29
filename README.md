@@ -1,5 +1,5 @@
 # GIWAXSim Instruction Manual
-This repository contains scripts for generating forward simulations of GIWAXS (Grazing Incidence Wide-Angle X-ray Scattering) data. The simulations are created using molecular `.xyz` files and produce 3D voxel grids of scattering intensity values, which can then be used to generate 2D detector images at various geometries.
+This repository contains scripts for generating forward simulations of GIWAXS (Grazing Incidence Wide-Angle X-ray Scattering) data. The simulations are created using structure `.xyz` files and produce 3D voxel grids of scattering intensity values, which can then be used to generate 2D detector images at various geometries.
 
 ![gif of detector intersection of reciprocal space](example_giwaxs/phi_sidebyside.gif)
 
