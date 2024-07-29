@@ -46,7 +46,7 @@ def main(config):
 
     # using f0 scaling instead, this may be useful for some though
     # Apply real-space Gaussian smearing
-    # iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma)
+    # iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma) t
 
     # apply (f0(q)/z)**2 scaling to scatting intensity values
     iq = add_f0_q_3d(iq, qx, qy, qz, f0_element)
