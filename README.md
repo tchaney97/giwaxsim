@@ -21,7 +21,7 @@ This script takes a `.xyz` file and converts it into a 3D voxel grid of scatteri
 4. Cropping reciprocal space voxel grid to relevant q-values and saving them for later use.
 
 Configuration file parameters:\
-An example configuration file is in `/config_templates/voxelgridmaker.txt`
+An example configuration file is in `/config_templates/voxelgridmaker_config.txt`
 - `xyz_path`=(string) path to a `.xyz` file you would like to generate I vs q voxel grid for.
 - `gen_name`=(string) a short sample name used to create directories and output files.
 - `voxel_size`=(positive float) side length dimension of square real-space voxels in Å.
@@ -45,7 +45,7 @@ This script loads the iq reciprocal space voxel grid and associated axes generat
 5. Summing final detector image of all orientations.
 
 Configuration file parameters:\
-An example configuration file is in `/config_templates/detectormaker.txt`
+An example configuration file is in `/config_templates/detectormaker_config.txt`
 - `iq_output_folder`=(string) output from `generate_iq_voxelgrid.py` (form `name_output_files/`).
 - `gen_name`=(string) same `gen_name` used in `voxelgridmaker.py`.
 - `max_q`=(positive float) maximum q-value on detector must be ≤ max_q used to make iq file.
@@ -77,7 +77,7 @@ Tips:
 This script takes a `.xyz` periodic unit cell and propagates it to a desired orthorhombic slab size.
 
 Configuration file parameters:\
-An example configuration file is in `/config_templates/slabmaker.txt`
+An example configuration file is in `/config_templates/slabmaker_config.txt`
 - `input_filepath`=(string) path to `.xyz` cell (ex: `./test_xyz_files/graphite_UnitCell.xyz`).
 - `output_filepath`=(string) directory where you would like `.xyz` slab saved (optional).
 - `gen_name`=(string) same `gen_name` used in `voxelgridmaker.py`.
