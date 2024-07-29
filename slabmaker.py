@@ -1,26 +1,28 @@
 import numpy as np
 import os
+import argparse
 
-from ptable_dict import ptable, atomic_masses
-from utilities import write_xyz, load_xyz, calc_real_space_abc
+from tools.ptable_dict import ptable, atomic_masses
+from tools.utilities import write_xyz, load_xyz, calc_real_space_abc, parse_config_file
 
 def main(config):
     # Inputs
     input_filepath = config.get('input_filepath')
-    output_folder = config.get('output_folder', os.path.basename(input_filepath))
+    output_folder = config.get('output_folder', os.path.dirname(input_filepath))
     gen_name = config.get('gen_name')
-    x_size = config.get('x_size')
-    y_size = config.get('y_size')
-    z_size = config.get('z_size')
-    a = config.get('a')
-    b = config.get('b')
-    c = config.get('c')
-    alpha = config.get('alpha')
-    beta = config.get('beta')
-    gamma = config.get('gamma')
+    x_size = float(config.get('x_size'))
+    y_size = float(config.get('y_size'))
+    z_size = float(config.get('z_size'))
+    a = float(config.get('a'))
+    b = float(config.get('b'))
+    c = float(config.get('c'))
+    alpha = float(config.get('alpha'))
+    beta = float(config.get('beta'))
+    gamma = float(config.get('gamma'))
+
+    if not os.path.exists(output_folder):
+        os.mkdir(output_folder)
     
-    
-    base_dir = os.path.basename(input_filepath)
     coords, elements = load_xyz(input_filepath)
     
     a_vect, b_vect, c_vect = calc_real_space_abc(a, b, c, alpha, beta, gamma)
@@ -104,7 +106,7 @@ def main(config):
     coords_new = coords[mask]
     elements_new = elements[mask]
     
-    save_path = f'{output_folder}{gen_name}_rect_cut{x_size}x{y_size}x{z_size}.xyz'
+    save_path = f'{output_folder}/{gen_name}_rect_cut{int(x_size)}x{int(y_size)}x{int(z_size)}.xyz'
     write_xyz(save_path, coords_new, elements_new)
 
 if __name__ == "__main__":

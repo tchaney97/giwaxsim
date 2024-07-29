@@ -2,5 +2,5 @@ xyz_path=./test_xyz_files/graphite_medium.xyz
 gen_name=test
 voxel_size=0.3
 min_ax_size=512
-f0_element=0.2
-max_q=2.5
+f0_element=C
+max_q=5

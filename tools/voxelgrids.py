@@ -5,8 +5,8 @@ from matplotlib.pyplot import subplots
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
 
-from utilities import load_xyz, fft_gaussian
-from ptable_dict import ptable, aff_dict
+from tools.utilities import load_xyz, fft_gaussian
+from tools.ptable_dict import ptable, aff_dict
 
 def generate_density_grid(xyz_path, voxel_size, min_ax_size=256, bkg_edens=True):
     """

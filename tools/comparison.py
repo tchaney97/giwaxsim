@@ -1,9 +1,8 @@
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import fabio
 import numpy as np
 from scipy.interpolate import griddata
-from ptable_dict import ptable, aff_dict
+from tools.ptable_dict import ptable, aff_dict
 
 def find_nearest(array, value):
     array = np.asarray(array)

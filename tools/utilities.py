@@ -1,4 +1,3 @@
-from ptable_dict import aff_dict, ptable
 import numpy as np
 import re
 

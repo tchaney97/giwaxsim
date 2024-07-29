@@ -5,9 +5,9 @@ from multiprocessing import Pool
 import os
 import argparse
 
-from ptable_dict import ptable, atomic_masses
-from utilities import write_xyz, load_xyz, rotation_matrix, gaussian_kernel, parse_config_file
-from meshgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, multiply_ft_gaussian
+from tools.ptable_dict import ptable, atomic_masses
+from tools.utilities import write_xyz, load_xyz, rotation_matrix, gaussian_kernel, parse_config_file
+from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, multiply_ft_gaussian, add_f0_q_3d
 
 def main(config):
     # Input Parameters
@@ -15,7 +15,7 @@ def main(config):
     gen_name = config.get('gen_name')
     voxel_size = float(config.get('voxel_size', 0.3))
     min_ax_size = int(config.get('min_ax_size', 512))
-    sigma = float(config.get('f0_element', 'C'))
+    f0_element = (config.get('f0_element', 'C'))
     max_q = float(config.get('max_q', 2.5))
     output_dir = config.get('output_dir', os.getcwd())
     
@@ -49,7 +49,7 @@ def main(config):
     # iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma)
 
     # apply (f0(q)/z)**2 scaling to scatting intensity values
-    iq = add_f0_q_3d(iq, qx, qy, qz, element)
+    iq = add_f0_q_3d(iq, qx, qy, qz, f0_element)
 
 
     # Save

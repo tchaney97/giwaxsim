@@ -8,11 +8,11 @@ from multiprocessing import Pool
 import os
 import argparse
 
-from ptable_dict import ptable, atomic_masses
-from utilities import rotation_matrix, parse_config_file
-from meshgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, multiply_ft_gaussian
-from detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
-from detector import intersect_detector, rotate_psi_phi_theta, mirror_vertical_horizontal, generate_detector_ints
+from tools.ptable_dict import ptable, atomic_masses
+from tools.utilities import rotation_matrix, parse_config_file
+from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, multiply_ft_gaussian
+from tools.detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
+from tools.detector import intersect_detector, rotate_psi_phi_theta, mirror_vertical_horizontal, generate_detector_ints
 
 def main(config):
     # Input Parameters 

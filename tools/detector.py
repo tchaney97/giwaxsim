@@ -1,5 +1,5 @@
 import numpy as np
-from utilities import rotation_matrix
+from tools.utilities import rotation_matrix
 
 def make_detector(h_max, num_pixels_h, v_max, num_pixels_v):
     """
