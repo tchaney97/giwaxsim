@@ -46,7 +46,7 @@ This script loads the iq reciprocal space voxel grid and associated axes generat
 
 Configuration file parameters:\
 An example configuration file is in `/config_templates/detectormaker_config.txt`
-- `iq_output_folder`=(string) output from `generate_iq_voxelgrid.py` (form `name_output_files/`).
+- `iq_output_folder`=(string) output from `voxelgridmaker.py` (form `name_output_files/`).
 - `gen_name`=(string) same `gen_name` used in `voxelgridmaker.py`.
 - `max_q`=(positive float) maximum q-value on detector must be ≤ max_q used to make iq file.
 - `num_pixels`=(positive integer) number of pixels along each detector axis.
