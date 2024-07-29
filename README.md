@@ -22,13 +22,13 @@ This script takes a `.xyz` file and converts it into a 3D voxel grid of scatteri
 
 Configuration file parameters:\
 An example configuration file is in `/config_templates/voxelgridmaker.txt`
-- `xyz_path` – (string) path to a `.xyz` file you would like to generate I vs q voxel grid for.
-- `gen_name` – (string) a short sample name used to create directories and output files.
-- `voxel_size` – (positive float) side length dimension of square real-space voxels in Å.
-- `min_ax_size` – (positive integer) minimum number of voxels along each axis.
-- `f0_element` – (string) elemental symbol for z-normalized f0(q) scaling.
-- `max_q` – (positive float) determines the q-value to which the iq voxel grid is cropped.
-- `output_dir` – (string) path to output directory; if not defined, `os.get_cwd()` is used.
+- `xyz_path`=(string) path to a `.xyz` file you would like to generate I vs q voxel grid for.
+- `gen_name`=(string) a short sample name used to create directories and output files.
+- `voxel_size`=(positive float) side length dimension of square real-space voxels in Å.
+- `min_ax_size`=(positive integer) minimum number of voxels along each axis.
+- `f0_element`=(string) elemental symbol for z-normalized f0(q) scaling.
+- `max_q`=(positive float) determines the q-value to which the iq voxel grid is cropped.
+- `output_dir`=(string) path to output directory; if not defined, `os.get_cwd()` is used.
 
 Tips:
 - It is advantageous to choose an axis length that is larger than the slab described by the `.xyz` file. This “padding” can lower the bin size of the FFT, resulting in better q-resolution.
@@ -46,22 +46,22 @@ This script loads the iq reciprocal space voxel grid and associated axes generat
 
 Configuration file parameters:\
 An example configuration file is in `/config_templates/detectormaker.txt`
-- `iq_output_folder` – (string) output from `generate_iq_voxelgrid.py` (form `name_output_files/`).
-- `gen_name` – (string) same `gen_name` used in `voxelgridmaker.py`.
-- `max_q` – (positive float) maximum q-value on detector must be ≤ max_q used to make iq file.
-- `num_pixels` – (positive integer) number of pixels along each detector axis.
-- `angle_init_val1` – (float) 1st initializing detector rotation in degrees about `angle_init_ax1`.
-- `angle_init_val2` – (float) 2nd initializing detector rotation in degrees about `angle_init_ax2`.
-- `angle_init_val3` – (float) 3rd initializing detector rotation in degrees about `angle_init_ax3`.
-- `angle_init_ax1` – (string) rotation axis for 1st initializing rotation; set to none for no rotation.
-- `angle_init_ax2` – (string) rotation axis for 2nd initializing rotation; set to none for no rotation.
-- `angle_init_ax3` – (string) rotation axis for 3rd initializing rotation; set to none for no rotation.
-- `psi_start` – (float) starting value in degrees for psi.
-- `psi_end` – (float) ending value in degrees for psi.
-- `psi_num` – (positive integer) number of linearly spaced psi steps.
-- `phi_start` – (float) starting value in degrees for phi.
-- `phi_end` – (float) ending value in degrees for phi.
-- `phi_num` – (positive integer) number of linearly spaced phi steps.
+- `iq_output_folder`=(string) output from `generate_iq_voxelgrid.py` (form `name_output_files/`).
+- `gen_name`=(string) same `gen_name` used in `voxelgridmaker.py`.
+- `max_q`=(positive float) maximum q-value on detector must be ≤ max_q used to make iq file.
+- `num_pixels`=(positive integer) number of pixels along each detector axis.
+- `angle_init_val1`=(float) 1st initializing detector rotation in degrees about `angle_init_ax1`.
+- `angle_init_val2`=(float) 2nd initializing detector rotation in degrees about `angle_init_ax2`.
+- `angle_init_val3`=(float) 3rd initializing detector rotation in degrees about `angle_init_ax3`.
+- `angle_init_ax1`=(string) rotation axis for 1st initializing rotation; set to none for no rotation.
+- `angle_init_ax2`=(string) rotation axis for 2nd initializing rotation; set to none for no rotation.
+- `angle_init_ax3`=(string) rotation axis for 3rd initializing rotation; set to none for no rotation.
+- `psi_start`=(float) starting value in degrees for psi.
+- `psi_end`=(float) ending value in degrees for psi.
+- `psi_num`=(positive integer) number of linearly spaced psi steps.
+- `phi_start`=(float) starting value in degrees for phi.
+- `phi_end`=(float) ending value in degrees for phi.
+- `phi_num`=(positive integer) number of linearly spaced phi steps.
 
 Tips:
 - Rotation axes are defined as psi, phi, and theta for rotation about detector normal, vertical, and horizontal axes, respectively.
@@ -78,18 +78,18 @@ This script takes a `.xyz` periodic unit cell and propagates it to a desired ort
 
 Configuration file parameters:\
 An example configuration file is in `/config_templates/slabmaker.txt`
-- `input_filepath` – (string) path to `.xyz` cell (ex: `./test_xyz_files/graphite_UnitCell.xyz`).
-- `output_filepath` – (string) directory where you would like `.xyz` slab saved (optional).
-- `gen_name` – (string) same `gen_name` used in `voxelgridmaker.py`.
-- `x_size` – (float) size in Å of slab along x-axis.
-- `y_size` – (float) size in Å of slab along y-axis.
-- `z_size` – (float) size in Å of slab along z-axis.
-- `a` – (float) cell side length in Å.
-- `b` – (float) cell side length in Å.
-- `c` – (float) cell side length in Å.
-- `alpha` – (float) cell interior angle in degrees.
-- `beta` – (float) cell interior angle in degrees.
-- `gamma` – (float) cell interior angle in degrees.
+- `input_filepath`=(string) path to `.xyz` cell (ex: `./test_xyz_files/graphite_UnitCell.xyz`).
+- `output_filepath`=(string) directory where you would like `.xyz` slab saved (optional).
+- `gen_name`=(string) same `gen_name` used in `voxelgridmaker.py`.
+- `x_size`=(float) size in Å of slab along x-axis.
+- `y_size`=(float) size in Å of slab along y-axis.
+- `z_size`=(float) size in Å of slab along z-axis.
+- `a`=(float) cell side length in Å.
+- `b`=(float) cell side length in Å.
+- `c`=(float) cell side length in Å.
+- `alpha`=(float) cell interior angle in degrees.
+- `beta`=(float) cell interior angle in degrees.
+- `gamma`=(float) cell interior angle in degrees.
 
 ### plotandcompare.py:
 Script in progress. Current tools are contained in jupyter notebooks in the `test_notebooks` folder.
