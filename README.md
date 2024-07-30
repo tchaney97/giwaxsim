@@ -1,7 +1,7 @@
 # GIWAXSim
 This repository contains scripts for generating forward simulations of GIWAXS (Grazing Incidence Wide-Angle X-ray Scattering) data. The simulations are created using structure `.xyz` files and produce 3D voxel grids of scattering intensity values, which can then be used to generate 2D detector images at various geometries.
 
-![gif of detector intersection of reciprocal space](example_giwaxs/sidebyside5.gif)
+![gif of detector intersection of reciprocal space](sample_images/sidebyside5.gif)
 
 ## Requirements:
 - Python 3
