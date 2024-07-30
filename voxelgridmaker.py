@@ -11,7 +11,7 @@ from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downsel
 
 def main(config):
     # Input Parameters
-    xyz_folder = config.get('folder', None)
+    xyz_folder = config.get('xyz_folder', None)
     xyz_path = config.get('xyz_path', None)
     gen_name = config.get('gen_name')
     voxel_size = float(config.get('voxel_size', 0.3))
@@ -49,6 +49,8 @@ def main(config):
             iq_sum = iq_small
         else:
             iq_sum += iq_small
+    
+    iq_sum /= len(xyz_paths)
     
     # Reassign variables
     iq = iq_sum
