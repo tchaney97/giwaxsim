@@ -11,42 +11,54 @@ from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downsel
 
 def main(config):
     # Input Parameters
-    xyz_path = config.get('xyz_path')
+    xyz_folder = config.get('folder', None)
+    xyz_path = config.get('xyz_path', None)
     gen_name = config.get('gen_name')
     voxel_size = float(config.get('voxel_size', 0.3))
     min_ax_size = int(config.get('min_ax_size', 512))
     f0_element = (config.get('f0_element', 'C'))
     max_q = float(config.get('max_q', 2.5))
     output_dir = config.get('output_dir', os.getcwd())
+
+    if xyz_folder:
+        xyz_paths = glob.glob(f'{xyz_folder}*.xyz')
+    else:
+        xyz_paths = [xyz_path]
+        
+    for i, xyz_path in enumerate(xyz_paths):
+        dens_grid, x_axis, y_axis, z_axis = generate_density_grid(xyz_path, voxel_size, min_ax_size=min_ax_size)
     
-    dens_grid, x_axis, y_axis, z_axis = generate_density_grid(xyz_path, voxel_size, min_ax_size=min_ax_size)
+        iq, qx, qy, qz = convert_grid_qspace(dens_grid, x_axis, y_axis, z_axis)
+    
+        # Free up memory
+        del dens_grid
+        del x_axis
+        del y_axis
+        del z_axis
+    
+        # Optional downselect iq meshgrid based on max q desired
+        iq_small, qx_small, qy_small, qz_small = downselect_meshgrid(iq, qx, qy, qz, max_q)
+    
+        # Optional free up memory
+        del iq
+        del qx
+        del qy
+        del qz
 
-    iq, qx, qy, qz = convert_grid_qspace(dens_grid, x_axis, y_axis, z_axis)
-
-    # Free up memory
-    del dens_grid
-    del x_axis
-    del y_axis
-    del z_axis
-
-    # Optional downselect iq meshgrid based on max q desired
-    iq_small, qx_small, qy_small, qz_small = downselect_meshgrid(iq, qx, qy, qz, max_q)
-
-    # Optional free up memory
-    del iq
-    del qx
-    del qy
-    del qz
-
+        if i == 0:
+            iq_sum = iq_small
+        else:
+            iq_sum += iq_small
+    
     # Reassign variables
-    iq = iq_small
+    iq = iq_sum
     qx = qx_small
     qy = qy_small
     qz = qz_small
 
     # using f0 scaling instead, this may be useful for some though
     # Apply real-space Gaussian smearing
-    # iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma) t
+    # iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma)
 
     # apply (f0(q)/z)**2 scaling to scatting intensity values
     iq = add_f0_q_3d(iq, qx, qy, qz, f0_element)

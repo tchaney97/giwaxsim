@@ -32,6 +32,9 @@ def main(config):
     phi_start = float(config.get('phi_start'))
     phi_end = float(config.get('phi_end'))
     phi_num = int(config.get('phi_num'))
+    theta_start = float(config.get('theta_start'))
+    theta_end = float(config.get('theta_end'))
+    theta_num = int(config.get('theta_num'))
 
     # dirr = os.getcwd()
     # save_path = f'{dirr}/{gen_name}_output_files/'
@@ -90,9 +93,9 @@ def main(config):
     # Only need 1/4 of your total rotation space since symmetry allows us to mirror quadrants
     psis = np.linspace(psi_start, psi_end, num=int(psi_num)) # rotation in degrees of detector about detector normal axis
     phis = np.linspace(phi_start, phi_end, num=int(phi_num)) # rotation in degrees of detector about detector vertical axis
-    theta = 0 # rotation in degrees of detector about detector horizontal axis
+    thetas = np.linspace(theta_start, theta_end, num=int(theta_num)) # rotation in degrees of detector about detector horizontal axis
 
-    args_list = [(iq, qx, qy, qz, det_h, det_v, det_x, det_y, det_z, psi, phi, theta, det_save_path) for psi in psis for phi in phis]
+    args_list = [(iq, qx, qy, qz, det_h, det_v, det_x, det_y, det_z, psi, phi, theta, det_save_path) for psi in psis for phi in phis for theta in thetas]
     with Pool(processes=os.cpu_count()) as pool:
         filenames = pool.map(generate_detector_ints, args_list)
 

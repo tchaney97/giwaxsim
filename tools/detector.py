@@ -248,6 +248,6 @@ def generate_detector_ints(args):
     iq,qx,qy,qz,det_h,det_v,det_x,det_y,det_z,psi,phi,theta,save_path = args
     det_x2, det_y2, det_z2 = rotate_psi_phi_theta(det_x, det_y, det_z, psi, phi, theta)
     det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2, det_h, det_v)
-    filename = f'{save_path}det_ints_psi{psi:.0f}_phi{phi:.0f}.npy'
+    filename = f'{save_path}det_ints_psi{psi:.0f}_phi{phi:.0f}_theta{theta:.0f}.npy'
     np.save(filename, det_int)
     return filename
