@@ -68,8 +68,9 @@ Tips:
 - The detector begins with the vertical axis pointing along positive qz, the horizontal axis along positive qy, and the normal axis along positive qx.
 - Use “init” rotations to set up your detector such that psi and phi will capture the disorder you desire. Phi is usually used for fiber texture and psi for orientational disorder.
 - Visualization tools are available as jupyter notebooks in `./test_notebooks` to better understand these manipulations.
-- Only ¼ of the total rotation space needs to be probed as the GIWAXS detector plane is mirrored about the horizontal and vertical axis after summing.
+- For fiber texture, only ¼ of the total rotation space needs to be probed as the GIWAXS detector plane is mirrored about the horizontal and vertical axis after summing.
 - For example, if you are trying to match an experimental sample with fiber texture and ±15° tilting about the backbone axis, then you may define `psi_start`, `psi_end`, `psi_num` = (0, 15, 16) and `phi_start`, `phi_end`, `phi_num` = (0, 179, 180).
+- If you do not want mirroring you will manually have to comment out code, better solution will be added soon
 
 ## Other tools:
 
