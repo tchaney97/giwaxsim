@@ -96,3 +96,21 @@ Script in progress. Current tools are contained in jupyter notebooks in the `tes
 
 ### estimateresources.py:
 Script in progress. Current tools are contained in jupyter notebooks in the `test_notebooks` folder.
+
+## To do:
+- Implement analytical FT from Ty’s code?
+  - time=high, complexity=high
+  - Opens the door to desktop computing
+  - Can properly implement f0, f1, and f2
+  - Easier implementation of dynamics from MD
+- Add capability to enable/disable “mirroring” of detector images for spin-coat vs oriented film simulation
+  - time=low, complexity=low
+- Add capability for polarization effects 
+  - Time=low, complexity=medium
+- Add memory requirement estimator tool
+  - Time=medium, complexity=low
+- Convert plotting functions from notebook to script
+  - Time=medium, complexity=low
+- Check for and remove duplicated atomic positions in slabmaker
+  - Time=medium, complexity=medium
+
