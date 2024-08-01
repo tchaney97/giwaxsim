@@ -3,7 +3,7 @@ import os
 import argparse
 
 from tools.ptable_dict import ptable, atomic_masses
-from tools.utilities import write_xyz, load_xyz, calc_real_space_abc, parse_config_file
+from tools.utilities import write_xyz, load_xyz, load_pdb, calc_real_space_abc, parse_config_file
 
 def main(config):
     # Inputs
@@ -23,7 +23,12 @@ def main(config):
     if not os.path.exists(output_folder):
         os.mkdir(output_folder)
     
-    coords, elements = load_xyz(input_filepath)
+    if input_filepath[-3:] == 'xyz':
+        coords, elements = load_xyz(input_filepath)
+    elif input_filepath[-3:] == 'pdb':
+        coords, elements = load_pdb(input_filepath)
+    else:
+        raise Exception('files must be a .pdb or .xyz file')
     
     a_vect, b_vect, c_vect = calc_real_space_abc(a, b, c, alpha, beta, gamma)
     num_x = int(np.ceil(2*x_size/a_vect[0]))

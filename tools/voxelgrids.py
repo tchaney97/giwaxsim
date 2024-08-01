@@ -5,17 +5,17 @@ from matplotlib.pyplot import subplots
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
 
-from tools.utilities import load_xyz, fft_gaussian
+from tools.utilities import load_xyz, load_pdb, fft_gaussian
 from tools.ptable_dict import ptable, aff_dict
 
-def generate_density_grid(xyz_path, voxel_size, min_ax_size=256, bkg_edens=True):
+def generate_density_grid(input_path, voxel_size, min_ax_size=256, bkg_edens=True):
     """
     Generates a 3D voxelized electron density grid from .xyz file. 
     A average electron density is optionally applied outside of the smallest
     bounding cube for the coordinates in xyz path
     
     Parameters:
-    - xyz_path: string, path to xyz file of molecule, NP, etc
+    - input_path: string, path to xyz or pdb file of molecule, NP, etc
     - voxel_size: real-space dimension for voxel side length
     - min_ax_size: minimum axis size, axis sizes are set to 2^n for fft efficiency
     - bkg_edens: boolean if you would like bkg_edens applied (helps reduce kiessig fringes)
@@ -29,7 +29,12 @@ def generate_density_grid(xyz_path, voxel_size, min_ax_size=256, bkg_edens=True)
     """
 
     # Extracting the atomic symbols and positions from the xyz file
-    coords, symbols = load_xyz(xyz_path)
+    if input_path[-3:] == 'xyz':
+        coords, symbols = load_xyz(input_path)
+    elif input_path[-3:] == 'pdb':
+        coords, symbols = load_pdb(input_path)
+    else:
+        raise Exception('files must be a .pdb or .xyz file')
 
     # Shift coords array to origin
     coords = np.array(coords)

@@ -35,6 +35,37 @@ def load_xyz(xyz_path):
     
     return coords, elements
 
+def load_pdb(pdb_path):
+    """
+    Parameters:
+    - pdb_path: string, path to pdb file of molecule, protein, etc.
+
+    Returns:
+    - coords: 2D numpy array of x, y, z coordinates
+    - elements: 1D numpy array of element species for each coord in coords
+    """
+    coords = []
+    elements = []
+
+    # Open and read the PDB file
+    with open(pdb_path, 'r') as file:
+        for line in file:
+            if line.startswith("ATOM") or line.startswith("HETATM"):
+                # Extracting the relevant information from ATOM/HETATM lines
+                element = line[76:78].strip()  # Element symbol, typically in columns 77-78
+                x = float(line[30:38])  # X coordinate, typically in columns 31-38
+                y = float(line[38:46])  # Y coordinate, typically in columns 39-46
+                z = float(line[46:54])  # Z coordinate, typically in columns 47-54
+
+                elements.append(element)
+                coords.append([x, y, z])
+
+    coords = np.array(coords)
+    elements = np.array(elements)
+    
+    return coords, elements
+
+
 def write_xyz(output_path, coords, elements):
     """
     Writes the molecular structure to an xyz file at the specified path.

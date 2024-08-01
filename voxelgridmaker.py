@@ -6,13 +6,14 @@ import os
 import argparse
 
 from tools.ptable_dict import ptable, atomic_masses
-from tools.utilities import write_xyz, load_xyz, rotation_matrix, gaussian_kernel, parse_config_file
+from tools.utilities import write_xyz, load_xyz, load_pdb, rotation_matrix, gaussian_kernel, parse_config_file
 from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, multiply_ft_gaussian, add_f0_q_3d
 
 def main(config):
     # Input Parameters
-    xyz_folder = config.get('xyz_folder', None)
-    xyz_path = config.get('xyz_path', None)
+    input_folder = config.get('input_folder', None)
+    input_filepath = config.get('input_filepath', None)
+    filetype = config.get('filetype', 'xyz')
     gen_name = config.get('gen_name')
     voxel_size = float(config.get('voxel_size', 0.3))
     min_ax_size = int(config.get('min_ax_size', 512))
@@ -20,13 +21,15 @@ def main(config):
     max_q = float(config.get('max_q', 2.5))
     output_dir = config.get('output_dir', os.getcwd())
 
-    if xyz_folder:
-        xyz_paths = glob.glob(f'{xyz_folder}*.xyz')
+    if input_folder:
+        input_paths = glob.glob(f'{input_folder}*{filetype}')
+    elif input_filepath:
+        input_paths = [input_filepath]
     else:
-        xyz_paths = [xyz_path]
+        raise Exception('Either input_folder or input_path must be specified')
         
-    for i, xyz_path in enumerate(xyz_paths):
-        dens_grid, x_axis, y_axis, z_axis = generate_density_grid(xyz_path, voxel_size, min_ax_size=min_ax_size)
+    for i, input_path in enumerate(input_paths):
+        dens_grid, x_axis, y_axis, z_axis = generate_density_grid(input_path, voxel_size, min_ax_size=min_ax_size)
     
         iq, qx, qy, qz = convert_grid_qspace(dens_grid, x_axis, y_axis, z_axis)
     
@@ -50,7 +53,7 @@ def main(config):
         else:
             iq_sum += iq_small
     
-    iq_sum /= len(xyz_paths)
+    iq_sum /= len(input_paths)
     
     # Reassign variables
     iq = iq_sum
