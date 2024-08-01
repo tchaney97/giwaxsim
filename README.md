@@ -1,5 +1,5 @@
 # GIWAXSim
-This repository contains scripts for generating forward simulations of GIWAXS (Grazing Incidence Wide-Angle X-ray Scattering) data. The simulations are created using structure `.xyz` files and produce 3D voxel grids of scattering intensity values, which can then be used to generate 2D detector images at various geometries.
+This repository contains scripts for generating forward simulations of GIWAXS (Grazing Incidence Wide-Angle X-ray Scattering) data. The simulations are created using structure `.xyz` or `.pdb` files and produce 3D voxel grids of scattering intensity values, which can then be used to generate 2D detector images at various geometries.
 
 ![gif of detector intersection of reciprocal space](sample_images/sidebyside5.gif)
 
@@ -14,15 +14,16 @@ This repository contains scripts for generating forward simulations of GIWAXS (G
 Forward simulations are created through two different scripts: `voxelgridmaker.py` and `detectormaker.py`. These scripts are intended to be run in the command line with a single argument pointing to the configuration file (ex: `python voxelgridmaker.py --config /path/to/config_file.txt`). Details of these scripts and their configuration file formats are described below:
 
 ### voxelgridmaker.py:
-This script takes a `.xyz` file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup> through the following steps:
-1. Mapping the `.xyz` file onto an electron density voxel grid.
+This script takes a `.xyz` or `.pdb` structure file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup> through the following steps:
+1. Mapping the structure file onto an electron density voxel grid.
 2. Taking the FFT of the electron density voxel grid.
 3. Taking amplitude of values, recentering axes, converting to q-units, and applying a general atomic form factor.
 4. Cropping reciprocal space voxel grid to relevant q-values and saving them for later use.
 
 Configuration file parameters:\
 An example configuration file is in `/config_templates/voxelgridmaker_config.txt`
-- `xyz_path`=(string) path to a `.xyz` file you would like to generate I vs q voxel grid for.
+- `input_filepath`=(string) path to a `.xyz` file for I(q) voxelgrid from single file
+- `input_folder`=(string) path to a folder of `.xyz` or `.pdb` files for average I(q) from many files
 - `gen_name`=(string) a short sample name used to create directories and output files.
 - `voxel_size`=(positive float) side length dimension of square real-space voxels in Å.
 - `min_ax_size`=(positive integer) minimum number of voxels along each axis.
@@ -79,7 +80,7 @@ This script takes a `.xyz` periodic unit cell and propagates it to a desired ort
 
 Configuration file parameters:\
 An example configuration file is in `/config_templates/slabmaker_config.txt`
-- `input_filepath`=(string) path to `.xyz` cell (ex: `./test_xyz_files/graphite_UnitCell.xyz`).
+- `input_filepath`=(string) path to `.xyz` or `.pdb` file containing periodic cell
 - `output_filepath`=(string) directory where you would like `.xyz` slab saved (optional).
 - `gen_name`=(string) same `gen_name` used in `voxelgridmaker.py`.
 - `x_size`=(float) size in Å of slab along x-axis.
