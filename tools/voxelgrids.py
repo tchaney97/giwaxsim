@@ -287,20 +287,20 @@ def add_f0_q_3d(iq, qx_axis, qy_axis, qz_axis, element):
     iq_new = np.copy(iq)
     Z = ptable[element]
     aff = aff_dict[element]
-    
-    for i, qy in enumerate(qy_axis):
-        for j, qx in enumerate(qx_axis):
-            for k, qz in enumerate(qz_axis):
-                q = np.sqrt(qx**2 + qy**2 + qz**2)
-                # table 6.1.1.4 from https://it.iucr.org/Cb/ch6o1v0001/ 
-                fq = (
-                    aff[0]*np.exp(-aff[1]*(q**2)/(16*np.pi**2))+
-                    aff[2]*np.exp(-aff[3]*(q**2)/(16*np.pi**2))+
-                    aff[4]*np.exp(-aff[5]*(q**2)/(16*np.pi**2))+
-                    aff[6]*np.exp(-aff[7]*(q**2)/(16*np.pi**2))+
-                    aff[8])
-                
-                fq_norm = (fq/Z)**2
-                iq_new[i,j,k]*=fq_norm
+
+    qx, qy, qz = np.meshgrid(qx_axis, qy_axis, qz_axis)
+    q_grid_squared = qx**2 + qy**2 + qz**2
+
+    del qx
+    del qy
+    del qz
+
+    fq_norm = ((
+                aff[0]*np.exp(-aff[1]*(q_grid_squared)/(16*np.pi**2))+
+                aff[2]*np.exp(-aff[3]*(q_grid_squared)/(16*np.pi**2))+
+                aff[4]*np.exp(-aff[5]*(q_grid_squared)/(16*np.pi**2))+
+                aff[6]*np.exp(-aff[7]*(q_grid_squared)/(16*np.pi**2))+
+                aff[8])/Z)**2
+    iq_new *=fq_norm
             
     return iq_new
