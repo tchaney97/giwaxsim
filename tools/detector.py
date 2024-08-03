@@ -251,3 +251,4 @@ def generate_detector_ints(args):
     filename = f'{save_path}det_ints_psi{psi:.0f}_phi{phi:.0f}_theta{theta:.0f}.npy'
     np.save(filename, det_int)
     return filename
+

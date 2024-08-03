@@ -5,29 +5,35 @@ from matplotlib.pyplot import subplots
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
 
-from tools.utilities import load_xyz, load_pdb, fft_gaussian
+from tools.utilities import load_xyz, load_pdb, fft_gaussian, rotate_coords_z
 from tools.ptable_dict import ptable, aff_dict
 
-def generate_density_grid(input_path, voxel_size, min_ax_size=256, bkg_edens=True):
+def generate_voxel_grid2D(input_path, r_voxel_size, q_voxel_size, max_q, bkg_edens=True):
     """
-    Generates a 3D voxelized electron density grid from .xyz file. 
+    Generates a 3D voxelized scattering intensity reciprocal space grid from .xyz file. 
     A average electron density is optionally applied outside of the smallest
     bounding cube for the coordinates in xyz path
     
     Parameters:
     - input_path: string, path to xyz or pdb file of molecule, NP, etc
-    - voxel_size: real-space dimension for voxel side length
-    - min_ax_size: minimum axis size, axis sizes are set to 2^n for fft efficiency
+    - r_voxel_size: real-space dimension for electron density voxel side length
+    - q_voxel_size: scattering vector dimesnions for q-space voxel size (q_resolution)
+    - max_q: maximum q-value desired along both axese of detector
     - bkg_edens: boolean if you would like bkg_edens applied (helps reduce kiessig fringes)
     
 
     Returns:
-    - density_grid: 3D meshgrid of electron density values
-    - x_axis: 1D array of x coordinate values 
-    - y_axis: 1D array of y coordinate values 
-    - z_axis: 1D array of z coordinate values 
+    - iq_grid: 3D voxelgrid of scattering intensity values
+    - qx_axis: 1D array of qx coordinate values 
+    - qy_axis: 1D array of qy coordinate values 
+    - qz_axis: 1D array of qz coordinate values 
     """
 
+    #check
+    max_q_diag = np.sqrt(2)*max_q
+    if max_q_diag > 2*np.pi/r_voxel_size:
+        raise Exception('Max_q is non-physical for given voxel size')
+    
     # Extracting the atomic symbols and positions from the xyz file
     if input_path[-3:] == 'xyz':
         coords, symbols = load_xyz(input_path)
@@ -35,42 +41,90 @@ def generate_density_grid(input_path, voxel_size, min_ax_size=256, bkg_edens=Tru
         coords, symbols = load_pdb(input_path)
     else:
         raise Exception('files must be a .pdb or .xyz file')
+    #convert symbols to array of z_values
+    z_values = np.array([ptable[symbol] for symbol in symbols])
+    
+    #calculate number of pixels with size r_voxel_size needed along real-space axis to acheive the desired q_voxel_size
+    grid_size = int(np.ceil(2*np.pi/(q_voxel_size * r_voxel_size)))
+    #make sure grid size is not too small
+    x_bound = np.max(coords[:,0])-np.min(coords[:,0])
+    y_bound = np.max(coords[:,1])-np.min(coords[:,1])
+    z_bound = np.max(coords[:,2])-np.min(coords[:,2])
+    min_bound = np.min([x_bound, y_bound, z_bound])
+    if grid_size*r_voxel_size < min_bound:
+        raise Exception('Calculated real-space bounds smaller than simulation. Please lower delta_q value')
+    
+    #some calculation to see how many phi angles we need to do
+    phi_num = 360
+    last_phi = 360-(360/phi_num)
+    phis = np.linspace(0,last_phi, num=phi_num)
 
-    # Shift coords array to origin
-    coords = np.array(coords)
-    coords[:,0] -= np.min(coords[:,0])
-    coords[:,1] -= np.min(coords[:,1])
-    coords[:,2] -= np.min(coords[:,2])
+    #would be good to have this parallelizable
+    for phi in phis:
+        #rotate coords about phi
+        coords_rot = rotate_coords_z(coords, phi)
 
-    # axis grids
-    grid_size_x = int(np.ceil((np.max(coords[:,0]))/voxel_size))
-    grid_size_y = int(np.ceil((np.max(coords[:,1]))/voxel_size))
-    grid_size_z = int(np.ceil((np.max(coords[:,2]))/voxel_size))
+        # Shift coords array to origin
+        coords_rot[:,0] -= np.min(coords_rot[:,0])
+        coords_rot[:,1] -= np.min(coords_rot[:,1])
+        coords_rot[:,2] -= np.min(coords_rot[:,2])
 
-    #calcuate number of voxel grid points, pad to nearest 2^n
-    grid_vox_x = 1 << (grid_size_x - 1).bit_length()
-    grid_vox_y = 1 << (grid_size_y - 1).bit_length()
-    grid_vox_z = 1 << (grid_size_z - 1).bit_length()
-    if grid_vox_x < min_ax_size:
-        grid_vox_x = min_ax_size
-    if grid_vox_y < min_ax_size:
-        grid_vox_y = min_ax_size
-    if grid_vox_z < min_ax_size:
-        grid_vox_z = min_ax_size
+        #project coords 2D
+        # Convert y, z coordinates to pixel indices
+        y_indices = (coords[:, 1] // r_voxel_size).astype(int)
+        z_indices = (coords[:, 2] // r_voxel_size).astype(int)
+        
+        # Create a mask for valid indices (within the detector bounds)
+        valid_mask = (y_indices >= 0) & (y_indices < grid_size) & (z_indices >= 0) & (z_indices < grid_size)
+        y_indices = y_indices[valid_mask]
+        z_indices = z_indices[valid_mask]
+        valid_z = z_values[valid_mask]
+        
+        # Initialize the detector grid
+        detector_grid = np.zeros((grid_size, grid_size))
+        
+        # Accumulate intensities in the corresponding pixels
+        np.add.at(detector_grid, (y_indices, z_indices), valid_z)
+
+        #fft 2Dcoords, fftshift, convert to q, take magnitude squared
+
+        #some way to assign each pixel qx,qy,qz with trig
+        det_h_qx = 'foo'
+        det_h_qy = 'foo'
+        det_h_qz = 'foo'
+
+
+        #save in some scratch folder to combine into voxelgrid later
+
+    #create empty voxel grid
+    max_q_diag = max_q_diag + max_q_diag%delta_q
+    q_num = int(2*max_q_diag/delta_q)+1
+    qx = qy = qz = np.linspace(-max_q_diag, max_q_diag, q_num)
+    voxel_grid = np.zeros(q_num, q_num, q_num)
+
+    #for loop to load up each detector and axes, populate voxelgrid with values
+    #make sure to average when multiple values fall into same iq voxel
+    #mask out values that do not fall into voxelgrid
+
+
+
+
+
+
+
+    
+    grid_coords = np.round(coords/voxel_size).astype(int)
 
     #create axes
-    x_axis = np.linspace(0, grid_vox_x*voxel_size, grid_vox_x)
-    y_axis = np.linspace(0, grid_vox_y*voxel_size, grid_vox_y)
-    z_axis = np.linspace(0, grid_vox_z*voxel_size, grid_vox_z)
+    x_axis = np.linspace(0, axis_size*voxel_size, axis_size)
+    y_axis = np.linspace(0, axis_size*voxel_size, axis_size)
+    z_axis = np.linspace(0, axis_size*voxel_size, axis_size)
 
     # Create an empty grid
-    density_grid = np.zeros((grid_vox_y, grid_vox_x, grid_vox_z))
+    density_grid = np.zeros((axis_size, axis_size))
 
 
-    # Populate the grid
-    for coord, symbol in zip(coords, symbols):
-        grid_coord = (coord / voxel_size).astype(int)
-        density_grid[grid_coord[1], grid_coord[0], grid_coord[2]] += (ptable[symbol])
+
 
     #apply bkg electron density
     if bkg_edens:

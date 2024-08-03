@@ -169,3 +169,19 @@ def calc_real_space_abc(a_mag, b_mag, c_mag, alpha_deg, beta_deg, gamma_deg):
     c = np.array([cx, cy, cz])
     
     return a, b, c
+
+def rotate_coords_z(coords, phi):
+    # Convert phi to radians
+    phi_rad = np.radians(phi)
+    
+    # Define the rotation matrix for rotation about the z-axis
+    rotation_matrix = np.array([
+        [np.cos(phi_rad), -np.sin(phi_rad), 0],
+        [np.sin(phi_rad), np.cos(phi_rad), 0],
+        [0, 0, 1]
+    ])
+    
+    # Apply the rotation matrix to each coordinate
+    rotated_coords = np.dot(coords, rotation_matrix.T)
+    
+    return rotated_coords
