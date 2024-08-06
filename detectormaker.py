@@ -8,11 +8,9 @@ from multiprocessing import Pool
 import os
 import argparse
 
-from tools.ptable_dict import ptable, atomic_masses
-from tools.utilities import rotation_matrix, parse_config_file
-from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, multiply_ft_gaussian
+from tools.utilities import  parse_config_file, str_to_bool
 from tools.detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
-from tools.detector import intersect_detector, rotate_psi_phi_theta, mirror_vertical_horizontal, generate_detector_ints
+from tools.detector import mirror_vertical_horizontal, generate_detector_ints
 
 def main(config):
     # Input Parameters 
@@ -35,6 +33,10 @@ def main(config):
     theta_start = float(config.get('theta_start'))
     theta_end = float(config.get('theta_end'))
     theta_num = int(config.get('theta_num'))
+    mirror = str_to_bool(config.get('mirror', False))
+    cleanup = str_to_bool(config.get('cleanup', False))
+    num_cpus = int(config.get('num_cpus', os.cpu_count()))
+
 
     # dirr = os.getcwd()
     # save_path = f'{dirr}/{gen_name}_output_files/'
@@ -96,7 +98,7 @@ def main(config):
     thetas = np.linspace(theta_start, theta_end, num=int(theta_num)) # rotation in degrees of detector about detector horizontal axis
 
     args_list = [(iq, qx, qy, qz, det_h, det_v, det_x, det_y, det_z, psi, phi, theta, det_save_path) for psi in psis for phi in phis for theta in thetas]
-    with Pool(processes=os.cpu_count()) as pool:
+    with Pool(processes=num_cpus) as pool:
         filenames = pool.map(generate_detector_ints, args_list)
 
     det_files = filenames
@@ -108,8 +110,20 @@ def main(config):
             det_sum += det_img
 
     # Fold detector sum image to capture full orientational space
-    det_sum = mirror_vertical_horizontal(det_sum)
+    if mirror:
+        det_sum = mirror_vertical_horizontal(det_sum)
     np.save(f'{save_path}{gen_name}_det_sum.npy', det_sum)
+
+    if cleanup:
+        for filepath in filenames:
+            try:
+                os.remove(filepath)
+            except OSError as e:
+                print(f"Error deleting file {filepath}: {e}")
+        try:
+            os.rmdir(det_save_path)
+        except OSError as e:
+            print(f"Error deleting directory {det_save_path}: {e}")
 
     fig, ax1 = subplots()
     cax = ax1.imshow(det_sum,
