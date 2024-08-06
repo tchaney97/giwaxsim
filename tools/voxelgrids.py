@@ -4,11 +4,98 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
 from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
-from multiprocess import Pool
+from multiprocessing import Pool
 import os
 
 from tools.utilities import load_xyz, load_pdb, fft_gaussian, rotate_coords_z, get_element_f0_dict, get_element_f1_f2_dict
 from tools.ptable_dict import ptable, aff_dict
+
+def generate_density_grid(input_path, voxel_size, min_ax_size=256, bkg_edens=True):
+    """
+    Generates a 3D voxelized electron density grid from .xyz file. 
+    A average electron density is optionally applied outside of the smallest
+    bounding cube for the coordinates in xyz path
+    
+    Parameters:
+    - input_path: string, path to xyz or pdb file of molecule, NP, etc
+    - voxel_size: real-space dimension for voxel side length
+    - min_ax_size: minimum axis size, axis sizes are set to 2^n for fft efficiency
+    - bkg_edens: boolean if you would like bkg_edens applied (helps reduce kiessig fringes)
+    
+
+    Returns:
+    - density_grid: 3D meshgrid of electron density values
+    - x_axis: 1D array of x coordinate values 
+    - y_axis: 1D array of y coordinate values 
+    - z_axis: 1D array of z coordinate values 
+    """
+
+    # Extracting the atomic symbols and positions from the xyz file
+    if input_path[-3:] == 'xyz':
+        coords, symbols = load_xyz(input_path)
+    elif input_path[-3:] == 'pdb':
+        coords, symbols = load_pdb(input_path)
+    else:
+        raise Exception('files must be a .pdb or .xyz file')
+
+    # Shift coords array to origin
+    coords = np.array(coords)
+    coords[:,0] -= np.min(coords[:,0])
+    coords[:,1] -= np.min(coords[:,1])
+    coords[:,2] -= np.min(coords[:,2])
+
+    # axis grids
+    grid_size_x = int(np.ceil((np.max(coords[:,0]))/voxel_size))
+    grid_size_y = int(np.ceil((np.max(coords[:,1]))/voxel_size))
+    grid_size_z = int(np.ceil((np.max(coords[:,2]))/voxel_size))
+
+    #calcuate number of voxel grid points, pad to nearest 2^n
+    grid_vox_x = 1 << (grid_size_x - 1).bit_length()
+    grid_vox_y = 1 << (grid_size_y - 1).bit_length()
+    grid_vox_z = 1 << (grid_size_z - 1).bit_length()
+    if grid_vox_x < min_ax_size:
+        grid_vox_x = min_ax_size
+    if grid_vox_y < min_ax_size:
+        grid_vox_y = min_ax_size
+    if grid_vox_z < min_ax_size:
+        grid_vox_z = min_ax_size
+
+    #create axes
+    x_axis = np.linspace(0, grid_vox_x*voxel_size, grid_vox_x)
+    y_axis = np.linspace(0, grid_vox_y*voxel_size, grid_vox_y)
+    z_axis = np.linspace(0, grid_vox_z*voxel_size, grid_vox_z)
+
+    # Create an empty grid
+    density_grid = np.zeros((grid_vox_y, grid_vox_x, grid_vox_z))
+
+
+    # Populate the grid
+    for coord, symbol in zip(coords, symbols):
+        grid_coord = (coord / voxel_size).astype(int)
+        density_grid[grid_coord[1], grid_coord[0], grid_coord[2]] += (ptable[symbol])
+
+    #apply bkg electron density
+    if bkg_edens:
+        # Define bounds in voxel coordinates
+        x_bound = np.max(coords[:,0])
+        y_bound = np.max(coords[:,1])
+        z_bound = np.max(coords[:,2])
+        x_bound_vox = int(x_bound / voxel_size)
+        y_bound_vox = int(y_bound / voxel_size)
+        z_bound_vox = int(z_bound / voxel_size)
+        
+        # Calculate average electron density within the bounds
+        within_bounds = density_grid[:y_bound_vox, :x_bound_vox, :z_bound_vox]
+        average_density = np.mean(within_bounds)
+        print(average_density)
+    
+        # Fill voxels outside of bounds with average electron density value
+        density_grid[y_bound_vox:, :, :] = average_density
+        density_grid[:, x_bound_vox:, :] = average_density
+        density_grid[:, :, z_bound_vox:] = average_density
+        
+
+    return density_grid, x_axis, y_axis, z_axis
 
 def rotate_project_fft_coords(args):
         coords, f_values, phi, grid_size, r_voxel_size, temp_folder = args
