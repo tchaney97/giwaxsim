@@ -11,7 +11,62 @@ import os
 from tools.utilities import load_xyz, load_pdb, fft_gaussian, rotate_coords_z, get_element_f0_dict, get_element_f1_f2_dict
 from tools.ptable_dict import ptable, aff_dict
 
-def generate_density_grid(input_path, voxel_size, min_ax_size=256, bkg_edens=True):
+def downselect_voxelgrid(grid, x_axis, y_axis, z_axis, max_val):
+    """
+    selects a cube portion of meshgrid centered about origin containing all voxels within
+    max_val in each cartesian direction
+
+    Parameters:
+    - grid: A 3D numpy array to be downselected with indices (y,x,z)
+    - x_axis: 1D array of x coordinate values
+    - y_axis: 1D array of y coordinate values
+    - z_axis: 1D array of z coordinate values
+    - max_val: Maximum value for the selection range in each Cartesian direction
+
+
+    Returns:
+    - small_grid: a 3D numpy array with indices (y,x,z)
+    - x_axis2: 1D array of x coordinate values
+    - y_axis2: 1D array of y coordinate values
+    - z_axis2: 1D array of z coordinate values
+    """
+    #add one voxel buffer to ensure max_val is contained in selection
+    voxel_size = np.abs(x_axis[1]-x_axis[0])
+    max_val += voxel_size
+
+    x_idxs = np.where(np.abs(x_axis)<max_val)[0]
+    y_idxs = np.where(np.abs(y_axis)<max_val)[0]
+    z_idxs = np.where(np.abs(z_axis)<max_val)[0]
+
+    small_grid = grid[y_idxs[0]:y_idxs[-1]+1, x_idxs[0]:x_idxs[-1]+1, z_idxs[0]:z_idxs[-1]+1]
+    x_axis2 = x_axis[x_idxs[0]:x_idxs[-1]+1]
+    y_axis2 = y_axis[y_idxs[0]:y_idxs[-1]+1]
+    z_axis2 = z_axis[z_idxs[0]:z_idxs[-1]+1]
+
+    return small_grid, x_axis2, y_axis2, z_axis2
+
+def fill_bkg_dens3D(density_grid, coords, r_voxel_size):
+    #apply bkg electron density
+    # Define bounds in voxel coordinates
+    x_bound = np.max(coords[:,0])
+    y_bound = np.max(coords[:,1])
+    z_bound = np.max(coords[:,2])
+    x_bound_vox = int(x_bound / r_voxel_size)
+    y_bound_vox = int(y_bound / r_voxel_size)
+    z_bound_vox = int(z_bound / r_voxel_size)
+
+    # Calculate average electron density within the bounds
+    within_bounds = density_grid[:y_bound_vox, :x_bound_vox, :z_bound_vox]
+    average_density = np.mean(within_bounds)
+
+    # Fill voxels outside of bounds with average electron density value
+    density_grid[y_bound_vox:, :, :] = average_density
+    density_grid[:, x_bound_vox:, :] = average_density
+    density_grid[:, :, z_bound_vox:] = average_density
+
+    return density_grid
+
+def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, bkg_edens=True):
     """
     Generates a 3D voxelized electron density grid from .xyz file.
     A average electron density is optionally applied outside of the smallest
@@ -33,70 +88,136 @@ def generate_density_grid(input_path, voxel_size, min_ax_size=256, bkg_edens=Tru
 
     # Extracting the atomic symbols and positions from the xyz file
     if input_path[-3:] == 'xyz':
-        coords, symbols = load_xyz(input_path)
+        coords, elements = load_xyz(input_path)
     elif input_path[-3:] == 'pdb':
-        coords, symbols = load_pdb(input_path)
+        coords, elements = load_pdb(input_path)
     else:
         raise Exception('files must be a .pdb or .xyz file')
-
-    # Shift coords array to origin
-    coords = np.array(coords)
-    coords[:,0] -= np.min(coords[:,0])
-    coords[:,1] -= np.min(coords[:,1])
-    coords[:,2] -= np.min(coords[:,2])
-
-    # axis grids
-    grid_size_x = int(np.ceil((np.max(coords[:,0]))/voxel_size))
-    grid_size_y = int(np.ceil((np.max(coords[:,1]))/voxel_size))
-    grid_size_z = int(np.ceil((np.max(coords[:,2]))/voxel_size))
-
-    #calcuate number of voxel grid points, pad to nearest 2^n
-    grid_vox_x = 1 << (grid_size_x - 1).bit_length()
-    grid_vox_y = 1 << (grid_size_y - 1).bit_length()
-    grid_vox_z = 1 << (grid_size_z - 1).bit_length()
-    if grid_vox_x < min_ax_size:
-        grid_vox_x = min_ax_size
-    if grid_vox_y < min_ax_size:
-        grid_vox_y = min_ax_size
-    if grid_vox_z < min_ax_size:
-        grid_vox_z = min_ax_size
+    
+    #check
+    max_q_diag = np.sqrt(2)*max_q
+    if max_q_diag > 2*np.pi/r_voxel_size:
+        raise Exception('Max_q is non-physical for given voxel size')
+    
+    #calculate number of pixels with size r_voxel_size needed along real-space axis to acheive the desired q_voxel_size
+    grid_size = int(np.ceil(2*np.pi/(q_voxel_size * r_voxel_size)))
+    #make sure grid size is not too small
+    x_bound = np.max(coords[:,0])-np.min(coords[:,0])
+    y_bound = np.max(coords[:,1])-np.min(coords[:,1])
+    z_bound = np.max(coords[:,2])-np.min(coords[:,2])
+    min_bound = np.min([x_bound, y_bound, z_bound])
+    if grid_size*r_voxel_size < min_bound:
+        raise Exception('Calculated real-space bounds smaller than simulation. Please lower delta_q value')
 
     #create axes
-    x_axis = np.linspace(0, grid_vox_x*voxel_size, grid_vox_x)
-    y_axis = np.linspace(0, grid_vox_y*voxel_size, grid_vox_y)
-    z_axis = np.linspace(0, grid_vox_z*voxel_size, grid_vox_z)
+    x_axis = np.linspace(0, grid_size*r_voxel_size, grid_size)
+    y_axis = np.linspace(0, grid_size*r_voxel_size, grid_size)
+    z_axis = np.linspace(0, grid_size*r_voxel_size, grid_size)
 
-    # Create an empty grid
-    density_grid = np.zeros((grid_vox_y, grid_vox_x, grid_vox_z))
+    #good to have this parallelizable
+    if aff_num_qs == 1:
+        # Create an empty grid
+        density_grid = np.zeros((grid_size, grid_size, grid_size))
+        #convert symbols to array of z_values used as f here
+        f_values = np.array([ptable[element] for element in elements])
+        # Populate the grid
+        grid_coords = (coords // r_voxel_size).astype(int)
+        np.add.at(density_grid, (grid_coords[:,1], grid_coords[:,0], grid_coords[:,2]), f_values)
 
+        #apply bkg electron density
+        if bkg_edens:
+            density_grid = fill_bkg_dens3D(density_grid, coords, r_voxel_size)
 
-    # Populate the grid
-    for coord, symbol in zip(coords, symbols):
-        grid_coord = (coord / voxel_size).astype(int)
-        density_grid[grid_coord[1], grid_coord[0], grid_coord[2]] += (ptable[symbol])
+        master_iq_3D, qx_shifted, qy_shifted, qz_shifted  = convert_grid_qspace(density_grid, x_axis, y_axis, z_axis)
+        del density_grid
+        master_iq_3D, qx_shifted, qy_shifted, qz_shifted = downselect_voxelgrid(master_iq_3D, qx_shifted, qy_shifted, qz_shifted, max_q)
 
-    #apply bkg electron density
-    if bkg_edens:
-        # Define bounds in voxel coordinates
-        x_bound = np.max(coords[:,0])
-        y_bound = np.max(coords[:,1])
-        z_bound = np.max(coords[:,2])
-        x_bound_vox = int(x_bound / voxel_size)
-        y_bound_vox = int(y_bound / voxel_size)
-        z_bound_vox = int(z_bound / voxel_size)
+    #not very memory or cpu efficient implimentation. Fix later
+    elif aff_num_qs > 1:
+        f1_f2_dict = get_element_f1_f2_dict(energy, elements)
+        f1_f2_values = np.array([f1_f2_dict[element] for element in elements])
+        #build iq voxelgrid over many q values for proper f0(q)
+        for i, aff_q_num in range(int(aff_num_qs)):
+            # Create an empty grid
+            density_grid = np.zeros((grid_size, grid_size, grid_size))
+            #calculate q_values for f0 evaluation
+            step = (max_q_diag/(int(aff_num_qs)))
+            q_val = 0.5*step+aff_q_num*step
+            upper_q = q_val+step/2
+            lower_q = q_val-step/2
+            f0_dict = get_element_f0_dict(q_val, elements)
+            f0_values = np.array([f0_dict[element] for element in elements])
+            f_values = f0_values + f1_f2_values
 
-        # Calculate average electron density within the bounds
-        within_bounds = density_grid[:y_bound_vox, :x_bound_vox, :z_bound_vox]
-        average_density = np.mean(within_bounds)
-        print(average_density)
+            grid_coords = (coords // r_voxel_size).astype(int)
+            np.add.at(density_grid, (grid_coords[:,1], grid_coords[:,0], grid_coords[:,2]), f_values)
+            #apply bkg electron density
+            if bkg_edens:
+                density_grid = fill_bkg_dens3D(density_grid, coords, r_voxel_size)
+            
+            iq_3D, qx_shifted, qy_shifted, qz_shifted = convert_grid_qspace(density_grid, x_axis, y_axis, z_axis)
+            del density_grid
+            iq_3D, qx_shifted, qy_shifted, qz_shifted = downselect_voxelgrid(iq_3D, qx_shifted, qy_shifted, qz_shifted, max_q)
+            if i==0:
+                qx_mesh, qy_mesh, qz_mesh = np.meshgrid(qx_shifted, qy_shifted, qz_shifted)
+                qr_mesh = np.sqrt(qx_mesh**2 + qy_mesh**2 + qz_mesh**2)
+                del qx_mesh, qy_mesh, qz_mesh
+                master_iq_3D = np.zeros_like(iq_3D)
+            iq_mask = (qr_mesh <= upper_q) & (qr_mesh > lower_q)
+            master_iq_3D += np.where(iq_mask, iq_3D, 0)
 
-        # Fill voxels outside of bounds with average electron density value
-        density_grid[y_bound_vox:, :, :] = average_density
-        density_grid[:, x_bound_vox:, :] = average_density
-        density_grid[:, :, z_bound_vox:] = average_density
+        # Save
+    if output_dir:
+        save_path = f'{output_dir}/{gen_name}_output_files/'
+        if not os.path.exists(save_path):
+            os.mkdir(save_path)
 
+        np.save(f'{save_path}{gen_name}_iq.npy', master_iq_3D)
+        np.save(f'{save_path}{gen_name}_qx.npy', qx_shifted)
+        np.save(f'{save_path}{gen_name}_qy.npy', qy_shifted)
+        np.save(f'{save_path}{gen_name}_qz.npy', qz_shifted)
+    else:
+        return master_iq_3D, qx_shifted, qy_shifted, qz_shifted
 
-    return density_grid, x_axis, y_axis, z_axis
+def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis):
+    """
+    Generates a 3D voxelized scattering intensity grid from input electron density grid.
+    Scattering is given as norm**2 of fft and new qmesh axes
+
+    Parameters:
+    - density_grid: 3D meshgrid of electron density values
+    - x_axis: 1D array of x coordinate values
+    - y_axis: 1D array of y coordinate values
+    - z_axis: 1D array of z coordinate values
+
+    Returns:
+    - iq: 3D meshgrid of scattering complex values
+    - qx_axis: 1D array of qx coordinate values
+    - qy_axis: 1D array of qy coordinate values
+    - qz_axis: 1D array of qz coordinate values
+    """
+
+    voxel_size = x_axis[1]-x_axis[0]
+    grid_size_x = len(x_axis)
+    grid_size_y = len(y_axis)
+    grid_size_z = len(z_axis)
+
+    # Calculate 3D q-values
+    qx = np.fft.fftfreq(grid_size_x, d=voxel_size) * 2 * np.pi
+    qy = np.fft.fftfreq(grid_size_y, d=voxel_size) * 2 * np.pi
+    qz = np.fft.fftfreq(grid_size_z, d=voxel_size) * 2 * np.pi
+    qx_shifted = fftshift(qx)
+    qy_shifted = fftshift(qy)
+    qz_shifted = fftshift(qz)
+
+    # Compute the Fourier transform of the density grid
+    ft_density = fftn(density_grid)
+    ft_density_shifted = fftshift(ft_density)  # Shift the zero-frequency component to the center of the spectrum
+
+    # Magnitude squared of the Fourier transform for scattering intensity I(q)
+    iq = np.abs(ft_density_shifted)**2
+
+    return iq, qx_shifted, qy_shifted, qz_shifted
 
 def rotate_project_fft_coords(args):
         coords, f_values, phi, grid_size, r_voxel_size, temp_folder = args
@@ -163,7 +284,7 @@ def create_shared_array(shape):
     shm = shared_memory.SharedMemory(create=True, size=np.prod(shape) * np.dtype(np.float64).itemsize)
     return np.ndarray(shape, dtype=np.float64, buffer=shm.buf), shm
 
-def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name):
+def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name, upper_q, lower_q):
     # Access the shared memory arrays using their names
     voxel_grid_shm = shared_memory.SharedMemory(name=voxel_grid_shm_name)
     voxel_grid_count_shm = shared_memory.SharedMemory(name=voxel_grid_count_shm_name)
@@ -172,22 +293,27 @@ def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_co
     voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
     voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
 
-        # load up files for each detector
+    # load up files for each detector
     iq_2D = np.load(f'{filepath}_iq.npy')
     det_h_qx = np.load(f'{filepath}_h_qx.npy')
     det_h_qy = np.load(f'{filepath}_h_qy.npy')
     det_v_qz = np.load(f'{filepath}_v_qz.npy')
 
+    if upper_q and lower_q:
         # mask out values that do not fall within bounds
-    det_h_mask = (det_h_qx <= np.max(qx)) & (det_h_qx >= np.min(qx)) & (det_h_qy <= np.max(qy)) & (det_h_qy >= np.min(qy))
-    det_v_mask = (det_v_qz <= np.max(qz)) & (det_v_qz >= np.min(qz))
+        det_h_mask = (det_h_qx <= upper_q) & (det_h_qx >= lower_q) & (det_h_qy <= upper_q) & (det_h_qy >= lower_q)
+        det_v_mask = (det_v_qz <= upper_q) & (det_v_qz >= lower_q)
+    else:
+        # mask out values that do not fall within bounds
+        det_h_mask = (det_h_qx <= np.max(qx)) & (det_h_qx >= np.min(qx)) & (det_h_qy <= np.max(qy)) & (det_h_qy >= np.min(qy))
+        det_v_mask = (det_v_qz <= np.max(qz)) & (det_v_qz >= np.min(qz))
 
-        # slice 1D axis value arrays
+    # slice 1D axis value arrays
     det_h_qx = det_h_qx[det_h_mask]
     det_h_qy = det_h_qy[det_h_mask]
     det_v_qz = det_v_qz[det_v_mask]
 
-        # slice 2D array based on horizontal and vertical detector masks
+    # slice 2D array based on horizontal and vertical detector masks
     iq_2D = iq_2D[det_v_mask, :][:, det_h_mask]
 
     qx_mesh, qz_mesh = np.meshgrid(det_h_qx, det_v_qz)
@@ -199,29 +325,29 @@ def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_co
     iq_vals = np.ravel(iq_2D)
     counter_vals = np.ones_like(iq_vals)
 
-        # Convert y, z coordinates to pixel indices
+    # Convert y, z coordinates to pixel indices
     actual_q_voxel = np.diff(qz)[0] #voxels are cubes
     qx_indices = ((qx_vals-np.min(qx)) // actual_q_voxel).astype(int)
     qy_indices = ((qy_vals-np.min(qy)) // actual_q_voxel).astype(int)
     qz_indices = ((qz_vals-np.min(qz)) // actual_q_voxel).astype(int)
 
-        # Accumulate intensities in the corresponding pixels
+    # Accumulate intensities in the corresponding pixels
     np.add.at(voxel_grid, (qy_indices, qx_indices, qz_indices), iq_vals)
     np.add.at(voxel_grid_count, (qy_indices, qx_indices, qz_indices), counter_vals)
 
-def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
+def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q=None, lower_q=None):
     # Create shared arrays for voxel grid and voxel count with the specified dimensions
     voxel_grid, voxel_grid_shm = create_shared_array((q_num, q_num, q_num))
     voxel_grid_count, voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num))
 
     # Use ThreadPoolExecutor to process each file in parallel
     with ThreadPoolExecutor() as executor:
-        # Submit tasks to the executor for each file path
-        futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, voxel_grid_shm.name, voxel_grid_count_shm.name) for filepath in filepaths]
+        # Submit tasks to the executor for each file path        
+        futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, voxel_grid_shm.name, voxel_grid_count_shm.name, upper_q, lower_q) for filepath in filepaths]  
         # Wait for all tasks to complete
         for future in as_completed(futures):
             future.result()
-
+    
     # Close and unlink the shared memory arrays
     voxel_grid_shm.close()
     voxel_grid_shm.unlink()
@@ -231,55 +357,6 @@ def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
     # Create numpy arrays from the shared memory buffers
     voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
     voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
-
-    #make sure to average when multiple values fall into same iq voxel
-    iq_3D = voxel_grid/voxel_grid_count
-    # remove nans
-    iq_3D[iq_3D != iq_3D]=0
-
-    return iq_3D
-
-def frames_to_iq_mask(filepaths, q_num, qx, qy, qz, upper_q, lower_q):
-    voxel_grid = np.zeros((q_num, q_num, q_num))
-    voxel_grid_count = np.zeros((q_num, q_num, q_num))
-        #for loop to load up each detector and axes, populate voxelgrid with values
-    for filepath in filepaths:
-        # load up files for each detector
-        iq_2D = np.load(f'{filepath}_iq.npy')
-        det_h_qx = np.load(f'{filepath}_h_qx.npy')
-        det_h_qy = np.load(f'{filepath}_h_qy.npy')
-        det_v_qz = np.load(f'{filepath}_v_qz.npy')
-
-        # mask out values that do not fall within bounds
-        det_h_mask = (det_h_qx <= upper_q) & (det_h_qx >= lower_q) & (det_h_qy <= upper_q) & (det_h_qy >= lower_q)
-        det_v_mask = (det_v_qz <= upper_q) & (det_v_qz >= lower_q)
-
-        # slice 1D axis value arrays
-        det_h_qx = det_h_qx[det_h_mask]
-        det_h_qy = det_h_qy[det_h_mask]
-        det_v_qz = det_v_qz[det_v_mask]
-
-        # slice 2D array based on horizontal and vertical detector masks
-        iq_2D = iq_2D[det_v_mask, :][:, det_h_mask]
-
-        qx_mesh, qz_mesh = np.meshgrid(det_h_qx, det_v_qz)
-        qy_mesh, qz_mesh = np.meshgrid(det_h_qy, det_v_qz)
-
-        qx_vals = np.ravel(qx_mesh)
-        qy_vals = np.ravel(qy_mesh)
-        qz_vals = np.ravel(qz_mesh)
-        iq_vals = np.ravel(iq_2D)
-        counter_vals = np.ones_like(iq_vals)
-
-        # Convert y, z coordinates to pixel indices
-        actual_q_voxel = np.diff(qz)[0] #voxels are cubes
-        qx_indices = ((qx_vals-np.min(qx)) // actual_q_voxel).astype(int)
-        qy_indices = ((qy_vals-np.min(qy)) // actual_q_voxel).astype(int)
-        qz_indices = ((qz_vals-np.min(qz)) // actual_q_voxel).astype(int)
-
-        # Accumulate intensities in the corresponding pixels
-        np.add.at(voxel_grid, (qy_indices, qx_indices, qz_indices), iq_vals)
-        np.add.at(voxel_grid_count, (qy_indices, qx_indices, qz_indices), counter_vals)
 
     #make sure to average when multiple values fall into same iq voxel
     iq_3D = voxel_grid/voxel_grid_count
@@ -406,7 +483,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
             with Pool(processes=num_cpus) as pool:
                 filepaths = pool.map(rotate_project_fft_coords, args)
             #generate iq voxelgrid, mask out q's based on valid f0 range, add to master
-            iq_3D = frames_to_iq_mask(filepaths, q_num, qx, qy, qz, upper_q, lower_q)
+            iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q, lower_q)
             iq_mask = (qr_mesh <= upper_q) & (qr_mesh > lower_q)
             master_iq_3D += np.where(iq_mask, iq_3D, 0)
 
@@ -437,46 +514,6 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         np.save(f'{save_path}{gen_name}_qz.npy', qz)
     else:
         return iq_3D, qx, qy, qz
-
-def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis):
-    """
-    Generates a 3D voxelized scattering intensity grid from input electron density grid.
-    Scattering is given as norm**2 of fft and new qmesh axes
-
-    Parameters:
-    - density_grid: 3D meshgrid of electron density values
-    - x_axis: 1D array of x coordinate values
-    - y_axis: 1D array of y coordinate values
-    - z_axis: 1D array of z coordinate values
-
-    Returns:
-    - iq: 3D meshgrid of scattering complex values
-    - qx_axis: 1D array of qx coordinate values
-    - qy_axis: 1D array of qy coordinate values
-    - qz_axis: 1D array of qz coordinate values
-    """
-
-    voxel_size = x_axis[1]-x_axis[0]
-    grid_size_x = len(x_axis)
-    grid_size_y = len(y_axis)
-    grid_size_z = len(z_axis)
-
-    # Calculate 3D q-values
-    qx = np.fft.fftfreq(grid_size_x, d=voxel_size) * 2 * np.pi
-    qy = np.fft.fftfreq(grid_size_y, d=voxel_size) * 2 * np.pi
-    qz = np.fft.fftfreq(grid_size_z, d=voxel_size) * 2 * np.pi
-    qx_shifted = fftshift(qx)
-    qy_shifted = fftshift(qy)
-    qz_shifted = fftshift(qz)
-
-    # Compute the Fourier transform of the density grid
-    ft_density = fftn(density_grid)
-    ft_density_shifted = fftshift(ft_density)  # Shift the zero-frequency component to the center of the spectrum
-
-    # Magnitude squared of the Fourier transform for scattering intensity I(q)
-    iq = np.abs(ft_density_shifted)**2
-
-    return iq, qx_shifted, qy_shifted, qz_shifted
 
 def multiply_ft_gaussian(grid, x_axis, y_axis, z_axis, sigma):
     """
@@ -581,40 +618,6 @@ def plot_3D_grid(density_grid, x_axis, y_axis, z_axis, cmap, threshold_pct=98, n
     ax.zaxis.pane.set_edgecolor('white')
     ax.grid(color='white', linestyle='--', linewidth=0.5)
     plt.show()
-
-def downselect_meshgrid(grid, x_axis, y_axis, z_axis, max_val):
-    """
-    selects a cube portion of meshgrid centered about origin containing all voxels within
-    max_val in each cartesian direction
-
-    Parameters:
-    - grid: A 3D numpy array to be downselected with indices (y,x,z)
-    - x_axis: 1D array of x coordinate values
-    - y_axis: 1D array of y coordinate values
-    - z_axis: 1D array of z coordinate values
-    - max_val: Maximum value for the selection range in each Cartesian direction
-
-
-    Returns:
-    - small_grid: a 3D numpy array with indices (y,x,z)
-    - x_axis2: 1D array of x coordinate values
-    - y_axis2: 1D array of y coordinate values
-    - z_axis2: 1D array of z coordinate values
-    """
-    #add one voxel buffer to ensure max_val is contained in selection
-    voxel_size = np.abs(x_axis[1]-x_axis[0])
-    max_val += voxel_size
-
-    x_idxs = np.where(np.abs(x_axis)<max_val)[0]
-    y_idxs = np.where(np.abs(y_axis)<max_val)[0]
-    z_idxs = np.where(np.abs(z_axis)<max_val)[0]
-
-    small_grid = grid[y_idxs[0]:y_idxs[-1]+1, x_idxs[0]:x_idxs[-1]+1, z_idxs[0]:z_idxs[-1]+1]
-    x_axis2 = x_axis[x_idxs[0]:x_idxs[-1]+1]
-    y_axis2 = y_axis[y_idxs[0]:y_idxs[-1]+1]
-    z_axis2 = z_axis[z_idxs[0]:z_idxs[-1]+1]
-
-    return small_grid, x_axis2, y_axis2, z_axis2
 
 def add_f0_q_3d(iq, qx_axis, qy_axis, qz_axis, element):
     """

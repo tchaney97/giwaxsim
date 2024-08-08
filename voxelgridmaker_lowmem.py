@@ -4,7 +4,7 @@ import os
 import argparse
 
 from tools.utilities import parse_config_file, most_common_element
-from tools.voxelgrids import downselect_meshgrid, add_f0_q_3d, generate_voxel_grid_low_mem
+from tools.voxelgrids import downselect_voxelgrid, add_f0_q_3d, generate_voxel_grid_low_mem
 
 def main(config):
     # Input Parameters
@@ -40,7 +40,7 @@ def main(config):
                                                     num_cpus=num_cpus)
     
         # Optional downselect iq meshgrid based on max q desired
-        iq_small, qx_small, qy_small, qz_small = downselect_meshgrid(iq, qx, qy, qz, max_q)
+        iq_small, qx_small, qy_small, qz_small = downselect_voxelgrid(iq, qx, qy, qz, max_q)
     
         # Optional free up memory
         del iq

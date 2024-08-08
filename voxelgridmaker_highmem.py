@@ -1,13 +1,10 @@
 import numpy as np
-from numpy.fft import fftn, fftshift
 import glob
-from multiprocessing import Pool
 import os
 import argparse
 
-
-from tools.utilities import  parse_config_file
-from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, add_f0_q_3d
+from tools.utilities import parse_config_file, most_common_element
+from tools.voxelgrids import downselect_voxelgrid, add_f0_q_3d, generate_voxel_grid_high_mem
 
 def main(config):
     # Input Parameters
@@ -15,11 +12,13 @@ def main(config):
     input_filepath = config.get('input_filepath', None)
     filetype = config.get('filetype', 'xyz')
     gen_name = config.get('gen_name')
-    voxel_size = float(config.get('voxel_size', 0.3))
-    min_ax_size = int(config.get('min_ax_size', 512))
-    f0_element = (config.get('f0_element', 'C'))
+    r_voxel_size = float(config.get('r_voxel_size', 0.3))
+    q_voxel_size = float(config.get('q_voxel_size', 0.01))
+    aff_num_qs = int(config.get('aff_num_qs', 1))
+    energy = float(config.get('energy', 1))
     max_q = float(config.get('max_q', 2.5))
     output_dir = config.get('output_dir', os.getcwd())
+    bkg_edens = int(config.get('bkg_edens', False))
 
     if input_folder:
         input_paths = glob.glob(f'{input_folder}*{filetype}')
@@ -27,20 +26,22 @@ def main(config):
         input_paths = [input_filepath]
     else:
         raise Exception('Either input_folder or input_path must be specified')
+    
+    if bkg_edens:
+        bkg_edens=True
         
     for i, input_path in enumerate(input_paths):
-        dens_grid, x_axis, y_axis, z_axis = generate_density_grid(input_path, voxel_size, min_ax_size=min_ax_size)
-    
-        iq, qx, qy, qz = convert_grid_qspace(dens_grid, x_axis, y_axis, z_axis)
-    
-        # Free up memory
-        del dens_grid
-        del x_axis
-        del y_axis
-        del z_axis
+        iq, qx, qy, qz = generate_voxel_grid_high_mem(input_path,
+                                                    r_voxel_size, 
+                                                    q_voxel_size, 
+                                                    max_q, 
+                                                    aff_num_qs, 
+                                                    energy, 
+                                                    gen_name
+                                                    bkg_edens=bkg_edens)
     
         # Optional downselect iq meshgrid based on max q desired
-        iq_small, qx_small, qy_small, qz_small = downselect_meshgrid(iq, qx, qy, qz, max_q)
+        iq_small, qx_small, qy_small, qz_small = downselect_voxelgrid(iq, qx, qy, qz, max_q)
     
         # Optional free up memory
         del iq
@@ -61,13 +62,10 @@ def main(config):
     qy = qy_small
     qz = qz_small
 
-    # using f0 scaling instead, this may be useful for some though
-    # Apply real-space Gaussian smearing
-    # iq = multiply_ft_gaussian(iq, qx, qy, qz, sigma)
-
     # apply (f0(q)/z)**2 scaling to scatting intensity values
-    iq = add_f0_q_3d(iq, qx, qy, qz, f0_element)
-
+    if aff_num_qs == 1:
+        f0_element = most_common_element(input_paths[0])
+        iq = add_f0_q_3d(iq, qx, qy, qz, f0_element)
 
     # Save
     save_path = f'{output_dir}/{gen_name}_output_files/'
