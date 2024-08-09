@@ -2,6 +2,7 @@ import numpy as np
 import glob
 import os
 import argparse
+import time
 
 from tools.utilities import parse_config_file, most_common_element
 from tools.voxelgrids import downselect_voxelgrid, add_f0_q_3d, generate_voxel_grid_high_mem
@@ -78,6 +79,7 @@ def main(config):
     np.save(f'{save_path}{gen_name}_qz.npy', qz)
 
 if __name__ == "__main__":
+    start = time.time()
     parser = argparse.ArgumentParser(description="Process a configuration file.")
     parser.add_argument('--config', type=str, required=True, help='Path to the configuration file')
     
@@ -86,3 +88,6 @@ if __name__ == "__main__":
     config_path = args.config
     config = parse_config_file(config_path)
     main(config)
+    end = time.time()
+    runtime = end-start
+    print(f'\nTotal Time: {str(runtime)}')

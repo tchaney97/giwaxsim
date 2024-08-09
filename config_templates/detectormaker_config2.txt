@@ -1,4 +1,4 @@
-iq_output_folder=./N2200highmen_output_files/
+iq_output_folder=./N2200highmem_output_files/
 gen_name=N2200highmem
 max_q=2.5
 num_pixels=300
@@ -9,8 +9,8 @@ angle_init_ax1=psi
 angle_init_ax2=none
 angle_init_ax3=none
 psi_start=0
-psi_end=5
-psi_num=6
+psi_end=3
+psi_num=4
 phi_start=0
 phi_end=179
 phi_num=180

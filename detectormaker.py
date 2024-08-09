@@ -2,11 +2,10 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
-from numpy.fft import fftn, fftshift
-import glob
 from multiprocessing import Pool
 import os
 import argparse
+import time
 
 from tools.utilities import  parse_config_file, str_to_bool
 from tools.detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
@@ -159,6 +158,7 @@ def main(config):
     plt.savefig(f'{save_path}{gen_name}_det_sum_lin.png', dpi=300)
 
 if __name__ == "__main__":
+    start = time.time()
     parser = argparse.ArgumentParser(description="Process a configuration file.")
     parser.add_argument('--config', type=str, required=True, help='Path to the configuration file')
     
@@ -167,3 +167,6 @@ if __name__ == "__main__":
     config_path = args.config
     config = parse_config_file(config_path)
     main(config)
+    end = time.time()
+    runtime = end-start
+    print(f'\nTotal Time: {str(runtime)}')

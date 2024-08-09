@@ -122,7 +122,7 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
     #good to have this parallelizable
     if aff_num_qs == 1:
         # Create an empty grid
-        density_grid = np.zeros((grid_size, grid_size, grid_size))
+        density_grid = np.zeros((grid_size, grid_size, grid_size), dtype=complex)
         #use f=f1+jf2
         f1_f2_dict = get_element_f1_f2_dict(energy, elements)
         f_values = np.array([f1_f2_dict[element] for element in elements])
@@ -150,7 +150,7 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
         #build iq voxelgrid over many q values for proper f0(q)
         for i, aff_q_num in range(int(aff_num_qs)):
             # Create an empty grid
-            density_grid = np.zeros((grid_size, grid_size, grid_size))
+            density_grid = np.zeros((grid_size, grid_size, grid_size), dtype=complex)
             #calculate q_values for f0 evaluation
             step = (max_q_diag/(int(aff_num_qs)))
             q_val = 0.5*step+aff_q_num*step
@@ -159,10 +159,8 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
             f0_dict = get_element_f0_dict(q_val, elements)
             f0_values = np.array([f0_dict[element] for element in elements])
 
-            # f = f0(0) + f' + f"
-            # f' = f1 + z
-            # f" = f2
-            f_values = f0_values + f1_f2_values - z_values
+            #for xraydb chantler tables it appears f1=f' and not f1=f'+f0 as usual
+            f_values = f0_values + f1_f2_values
 
             grid_coords = (coords // r_voxel_size).astype(int)
             np.add.at(density_grid, (grid_coords[:,1], grid_coords[:,0], grid_coords[:,2]), f_values)
@@ -300,7 +298,7 @@ def create_shared_array(shape, name):
     shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
     return shm
 
-def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name, upper_q, lower_q):
+def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name):
     # Access the shared memory arrays using their names
     voxel_grid_shm = shared_memory.SharedMemory(name=voxel_grid_shm_name)
     voxel_grid_count_shm = shared_memory.SharedMemory(name=voxel_grid_count_shm_name)
@@ -315,14 +313,9 @@ def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_co
     det_h_qy = np.load(f'{filepath}_h_qy.npy')
     det_v_qz = np.load(f'{filepath}_v_qz.npy')
 
-    if upper_q and lower_q:
-        # mask out values that do not fall within bounds
-        det_h_mask = (det_h_qx <= upper_q) & (det_h_qx >= lower_q) & (det_h_qy <= upper_q) & (det_h_qy >= lower_q)
-        det_v_mask = (det_v_qz <= upper_q) & (det_v_qz >= lower_q)
-    else:
-        # mask out values that do not fall within bounds
-        det_h_mask = (det_h_qx <= np.max(qx)) & (det_h_qx >= np.min(qx)) & (det_h_qy <= np.max(qy)) & (det_h_qy >= np.min(qy))
-        det_v_mask = (det_v_qz <= np.max(qz)) & (det_v_qz >= np.min(qz))
+    # mask out values that do not fall within bounds
+    det_h_mask = (det_h_qx <= np.max(qx)) & (det_h_qx >= np.min(qx)) & (det_h_qy <= np.max(qy)) & (det_h_qy >= np.min(qy))
+    det_v_mask = (det_v_qz <= np.max(qz)) & (det_v_qz >= np.min(qz))
 
     # slice 1D axis value arrays
     det_h_qx = det_h_qx[det_h_mask]
@@ -352,44 +345,7 @@ def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_co
     np.add.at(voxel_grid_count, (qy_indices, qx_indices, qz_indices), counter_vals)
     
 
-# def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q=False, lower_q=False):
-#     # Create shared arrays for voxel grid and voxel count with the specified dimensions
-    
-#     voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
-#     voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
-
-#     # Use ThreadPoolExecutor to process each file in parallel
-#     with ThreadPoolExecutor() as executor:
-#         # Submit tasks to the executor for each file path        
-#         futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared', upper_q, lower_q) for filepath in filepaths]  
-#         # Wait for all tasks to complete
-#         for future in as_completed(futures):
-#             future.result()
-
-#     # Create numpy arrays from the shared memory buffers
-#     voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
-#     voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
-
-#     # Close and unlink the shared memory arrays
-#     voxel_grid_shm.close()
-#     voxel_grid_shm.unlink()
-#     voxel_grid_count_shm.close()
-#     voxel_grid_count_shm.unlink()
-    
-#     # print(f'voxel count sum: {np.sum(voxel_grid_count)}')
-#     # print(f'iq sum: {np.sum(voxel_grid)}')
-#     # for filepath in filepaths:
-#     #     iq_process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name, upper_q, lower_q)
-    
-#     #make sure to average when multiple values fall into same iq voxel
-#     # iq_3D = voxel_grid/voxel_grid_count
-#     iq_3D = np.divide(voxel_grid, voxel_grid_count, out=np.zeros_like(voxel_grid), where=voxel_grid_count != 0)
-#     # # remove nans
-#     # iq_3D[iq_3D != iq_3D]=0
-
-#     return iq_3D
-
-def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q=False, lower_q=False):
+def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
     # Create shared arrays for voxel grid and voxel count with the specified dimensions
     voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
     voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
@@ -397,7 +353,7 @@ def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q=False, lower_q=F
     try:
         # Use ThreadPoolExecutor to process each file in parallel
         with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared', upper_q, lower_q) for filepath in filepaths]
+            futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for filepath in filepaths]
             for future in as_completed(futures):
                 future.result()
 
@@ -521,7 +477,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         master_iq_3D = np.zeros((q_num, q_num, q_num))
         f1_f2_dict = get_element_f1_f2_dict(energy, elements)
         f1_f2_values = np.array([f1_f2_dict[element] for element in elements])
-        z_values = np.array([ptable[element] for element in elements])
+        # z_values = np.array([ptable[element] for element in elements])
         #build iq voxelgrid over many q values for proper f0(q)
         for aff_q_num in range(int(aff_num_qs)):
             #calculate q_values for f0 evaluation
@@ -532,17 +488,15 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
             f0_dict = get_element_f0_dict(q_val, elements)
             f0_values = np.array([f0_dict[element] for element in elements])
 
-            # f = f0(0) + f' + f"
-            # f' = f1 + z
-            # f" = f2
-            f_values = f0_values + f1_f2_values - z_values
+            #for xraydb chantler tables it appears f1=f' and not f1=f'+f0 as usual
+            f_values = f0_values + f1_f2_values
 
             #parallel processing of frames rotating around phi
             args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder) for phi in phis]
             with Pool(processes=num_cpus) as pool:
                 filepaths = pool.map(rotate_project_fft_coords, args)
             #generate iq voxelgrid, mask out q's based on valid f0 range, add to master
-            iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q, lower_q)
+            iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz)
             iq_mask = (qr_mesh <= upper_q) & (qr_mesh > lower_q)
             master_iq_3D += np.where(iq_mask, iq_3D, 0)
 
