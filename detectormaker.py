@@ -44,17 +44,28 @@ def main(config):
     if not os.path.exists(save_path):
         raise Exception(f'Path does not exist: {save_path}')
     
+    # load up 3D voxel grids from voxelgridmaker
     iq = np.load(f'{save_path}{gen_name}_iq.npy')
     qx = np.load(f'{save_path}{gen_name}_qx.npy')
     qy = np.load(f'{save_path}{gen_name}_qy.npy')
     qz = np.load(f'{save_path}{gen_name}_qz.npy')
 
-    det_save_path = f'{save_path}{gen_name}_det_imgs/'
+    # make save paths
+    det_sum_path = f'{save_path}{gen_name}_det_sum/'
     i = 0
-    while os.path.exists(det_save_path):
+    while os.path.exists(det_sum_path):
         i += 1
+        det_sum_path = f'{save_path}{gen_name}_det_sum{i}/'
+    os.mkdir(det_sum_path)
+
+    if i > 0:
         det_save_path = f'{save_path}{gen_name}_det_imgs{i}/'
-    os.mkdir(det_save_path)
+    else:
+        det_save_path = f'{save_path}{gen_name}_det_imgs/'
+
+    # shouldnt already exist but just in case
+    if not os.path.exists(det_save_path):
+        os.mkdir(det_save_path)
 
     det_pixels = (num_pixels, num_pixels) # horizontal, vertical
     det_qs = (max_q, max_q) # horizontal, vertical
@@ -81,15 +92,9 @@ def main(config):
         det_x, det_y, det_z = rotate_about_vertical(det_x, det_y, det_z, angle_init_val3)
     if angle_init_ax3=='theta':
         det_x, det_y, det_z = rotate_about_horizontal(det_x, det_y, det_z, angle_init_val3)
-
-    if i > 0:
-        det_dim_path = f'{save_path}{gen_name}_det_dims{i}/'
-    else:
-        det_dim_path = f'{save_path}{gen_name}_det_dims/'
-    os.mkdir(det_dim_path)
         
-    np.save(f'{det_dim_path}{gen_name}_det_h.npy', det_h)
-    np.save(f'{det_dim_path}{gen_name}_det_v.npy', det_v)
+    np.save(f'{det_sum_path}{gen_name}_det_h.npy', det_h)
+    np.save(f'{det_sum_path}{gen_name}_det_v.npy', det_v)
 
     # Set up rotations to capture disorder in your film. psi=tilting, phi=fiber texture
     # Only need 1/4 of your total rotation space since symmetry allows us to mirror quadrants
@@ -112,7 +117,9 @@ def main(config):
     # Fold detector sum image to capture full orientational space
     if mirror:
         det_sum = mirror_vertical_horizontal(det_sum)
-    np.save(f'{save_path}{gen_name}_det_sum.npy', det_sum)
+    det_sum[det_sum != det_sum] = 1e-6
+    det_sum[det_sum <= 0] = 1e-6
+    np.save(f'{det_sum_path}{gen_name}_det_sum.npy', det_sum)
 
     if cleanup:
         for filepath in filenames:

@@ -108,6 +108,11 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
     min_bound = np.min([x_bound, y_bound, z_bound])
     if grid_size*r_voxel_size < min_bound:
         raise Exception('Calculated real-space bounds smaller than simulation. Please lower delta_q value')
+    
+    # Shift coords array to origin
+    coords[:,0] -= np.min(coords[:,0])
+    coords[:,1] -= np.min(coords[:,1])
+    coords[:,2] -= np.min(coords[:,2])
 
     #create axes
     x_axis = np.linspace(0, grid_size*r_voxel_size, grid_size)
@@ -118,8 +123,12 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
     if aff_num_qs == 1:
         # Create an empty grid
         density_grid = np.zeros((grid_size, grid_size, grid_size))
+        #use f=f1+jf2
+        f1_f2_dict = get_element_f1_f2_dict(energy, elements)
+        f_values = np.array([f1_f2_dict[element] for element in elements])
         #convert symbols to array of z_values used as f here
-        f_values = np.array([ptable[element] for element in elements])
+        # f_values = np.array([ptable[element] for element in elements])
+
         # Populate the grid
         grid_coords = (coords // r_voxel_size).astype(int)
         np.add.at(density_grid, (grid_coords[:,1], grid_coords[:,0], grid_coords[:,2]), f_values)
@@ -132,10 +141,12 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
         del density_grid
         master_iq_3D, qx_shifted, qy_shifted, qz_shifted = downselect_voxelgrid(master_iq_3D, qx_shifted, qy_shifted, qz_shifted, max_q)
 
+
     #not very memory or cpu efficient implimentation. Fix later
     elif aff_num_qs > 1:
         f1_f2_dict = get_element_f1_f2_dict(energy, elements)
         f1_f2_values = np.array([f1_f2_dict[element] for element in elements])
+        z_values = np.array([ptable[element] for element in elements])
         #build iq voxelgrid over many q values for proper f0(q)
         for i, aff_q_num in range(int(aff_num_qs)):
             # Create an empty grid
@@ -147,7 +158,11 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
             lower_q = q_val-step/2
             f0_dict = get_element_f0_dict(q_val, elements)
             f0_values = np.array([f0_dict[element] for element in elements])
-            f_values = f0_values + f1_f2_values
+
+            # f = f0(0) + f' + f"
+            # f' = f1 + z
+            # f" = f2
+            f_values = f0_values + f1_f2_values - z_values
 
             grid_coords = (coords // r_voxel_size).astype(int)
             np.add.at(density_grid, (grid_coords[:,1], grid_coords[:,0], grid_coords[:,2]), f_values)
@@ -241,7 +256,7 @@ def rotate_project_fft_coords(args):
         valid_fs = f_values[valid_mask]
 
         # Initialize the detector grid
-        detector_grid = np.zeros((grid_size, grid_size))
+        detector_grid = np.zeros((grid_size, grid_size), dtype=complex)
 
         # Accumulate intensities in the corresponding pixels
         np.add.at(detector_grid, (z_indices, y_indices), valid_fs)
@@ -279,10 +294,11 @@ def rotate_project_fft_coords(args):
 
         return filepath
 
-def create_shared_array(shape):
+def create_shared_array(shape, name):
     # Create a shared memory array
-    shm = shared_memory.SharedMemory(create=True, size=np.prod(shape) * np.dtype(np.float64).itemsize)
-    return np.ndarray(shape, dtype=np.float64, buffer=shm.buf), shm
+    d_size = np.prod(shape) * np.dtype(np.float64).itemsize
+    shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
+    return shm
 
 def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name, upper_q, lower_q):
     # Access the shared memory arrays using their names
@@ -334,34 +350,69 @@ def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_co
     # Accumulate intensities in the corresponding pixels
     np.add.at(voxel_grid, (qy_indices, qx_indices, qz_indices), iq_vals)
     np.add.at(voxel_grid_count, (qy_indices, qx_indices, qz_indices), counter_vals)
-
-def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q=None, lower_q=None):
-    # Create shared arrays for voxel grid and voxel count with the specified dimensions
-    voxel_grid, voxel_grid_shm = create_shared_array((q_num, q_num, q_num))
-    voxel_grid_count, voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num))
-
-    # Use ThreadPoolExecutor to process each file in parallel
-    with ThreadPoolExecutor() as executor:
-        # Submit tasks to the executor for each file path        
-        futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, voxel_grid_shm.name, voxel_grid_count_shm.name, upper_q, lower_q) for filepath in filepaths]  
-        # Wait for all tasks to complete
-        for future in as_completed(futures):
-            future.result()
     
-    # Close and unlink the shared memory arrays
-    voxel_grid_shm.close()
-    voxel_grid_shm.unlink()
-    voxel_grid_count_shm.close()
-    voxel_grid_count_shm.unlink()
 
-    # Create numpy arrays from the shared memory buffers
-    voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
-    voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
+# def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q=False, lower_q=False):
+#     # Create shared arrays for voxel grid and voxel count with the specified dimensions
+    
+#     voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
+#     voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
 
-    #make sure to average when multiple values fall into same iq voxel
-    iq_3D = voxel_grid/voxel_grid_count
-    # remove nans
-    iq_3D[iq_3D != iq_3D]=0
+#     # Use ThreadPoolExecutor to process each file in parallel
+#     with ThreadPoolExecutor() as executor:
+#         # Submit tasks to the executor for each file path        
+#         futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared', upper_q, lower_q) for filepath in filepaths]  
+#         # Wait for all tasks to complete
+#         for future in as_completed(futures):
+#             future.result()
+
+#     # Create numpy arrays from the shared memory buffers
+#     voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
+#     voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
+
+#     # Close and unlink the shared memory arrays
+#     voxel_grid_shm.close()
+#     voxel_grid_shm.unlink()
+#     voxel_grid_count_shm.close()
+#     voxel_grid_count_shm.unlink()
+    
+#     # print(f'voxel count sum: {np.sum(voxel_grid_count)}')
+#     # print(f'iq sum: {np.sum(voxel_grid)}')
+#     # for filepath in filepaths:
+#     #     iq_process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name, upper_q, lower_q)
+    
+#     #make sure to average when multiple values fall into same iq voxel
+#     # iq_3D = voxel_grid/voxel_grid_count
+#     iq_3D = np.divide(voxel_grid, voxel_grid_count, out=np.zeros_like(voxel_grid), where=voxel_grid_count != 0)
+#     # # remove nans
+#     # iq_3D[iq_3D != iq_3D]=0
+
+#     return iq_3D
+
+def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz, upper_q=False, lower_q=False):
+    # Create shared arrays for voxel grid and voxel count with the specified dimensions
+    voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
+    voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
+
+    try:
+        # Use ThreadPoolExecutor to process each file in parallel
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared', upper_q, lower_q) for filepath in filepaths]
+            for future in as_completed(futures):
+                future.result()
+
+        # Create numpy arrays from the shared memory buffers
+        voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
+        voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
+
+        # Final IQ calculation
+        iq_3D = np.divide(voxel_grid, voxel_grid_count, out=np.zeros_like(voxel_grid), where=voxel_grid_count != 0)
+    finally:
+        # Ensure that shared memory is properly closed and unlinked
+        voxel_grid_shm.close()
+        voxel_grid_shm.unlink()
+        voxel_grid_count_shm.close()
+        voxel_grid_count_shm.unlink()
 
     return iq_3D
 
@@ -442,13 +493,16 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
 
     #good to have this parallelizable
     if aff_num_qs == 1:
+        #use f=f1+jf2
+        f1_f2_dict = get_element_f1_f2_dict(energy, elements)
+        f_values = np.array([f1_f2_dict[element] for element in elements], dtype=complex)
         #convert symbols to array of z_values used as f here
-        f_values = np.array([ptable[element] for element in elements])
+        # f_values = np.array([ptable[element] for element in elements])
         #parallel processing to generate frames used to construct iq_3D
         args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder) for phi in phis]
         with Pool(processes=num_cpus) as pool:
             filepaths = pool.map(rotate_project_fft_coords, args)
-        iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz)
+        master_iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz)
         # Cleanup temporary files
         for filepath in filepaths:
             try:
@@ -467,6 +521,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         master_iq_3D = np.zeros((q_num, q_num, q_num))
         f1_f2_dict = get_element_f1_f2_dict(energy, elements)
         f1_f2_values = np.array([f1_f2_dict[element] for element in elements])
+        z_values = np.array([ptable[element] for element in elements])
         #build iq voxelgrid over many q values for proper f0(q)
         for aff_q_num in range(int(aff_num_qs)):
             #calculate q_values for f0 evaluation
@@ -476,7 +531,11 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
             lower_q = q_val-step/2
             f0_dict = get_element_f0_dict(q_val, elements)
             f0_values = np.array([f0_dict[element] for element in elements])
-            f_values = f0_values + f1_f2_values
+
+            # f = f0(0) + f' + f"
+            # f' = f1 + z
+            # f" = f2
+            f_values = f0_values + f1_f2_values - z_values
 
             #parallel processing of frames rotating around phi
             args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder) for phi in phis]
@@ -508,12 +567,12 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         if not os.path.exists(save_path):
             os.mkdir(save_path)
 
-        np.save(f'{save_path}{gen_name}_iq.npy', iq_3D)
+        np.save(f'{save_path}{gen_name}_iq.npy', master_iq_3D)
         np.save(f'{save_path}{gen_name}_qx.npy', qx)
         np.save(f'{save_path}{gen_name}_qy.npy', qy)
         np.save(f'{save_path}{gen_name}_qz.npy', qz)
     else:
-        return iq_3D, qx, qy, qz
+        return master_iq_3D, qx, qy, qz
 
 def multiply_ft_gaussian(grid, x_axis, y_axis, z_axis, sigma):
     """

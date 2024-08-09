@@ -29,7 +29,7 @@ def main(config):
     
     if bkg_edens:
         bkg_edens=True
-        
+    
     for i, input_path in enumerate(input_paths):
         iq, qx, qy, qz = generate_voxel_grid_high_mem(input_path,
                                                     r_voxel_size, 
@@ -37,7 +37,7 @@ def main(config):
                                                     max_q, 
                                                     aff_num_qs, 
                                                     energy, 
-                                                    gen_name
+                                                    gen_name,
                                                     bkg_edens=bkg_edens)
     
         # Optional downselect iq meshgrid based on max q desired
