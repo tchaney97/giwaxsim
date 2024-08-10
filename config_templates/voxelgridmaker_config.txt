@@ -1,10 +1,10 @@
 input_filepath=./test_xyz_files/N2200_rect_cut300x80x300.xyz
 filetype=xyz
-gen_name=N2200lowmemtukey
+gen_name=N2200lowmem
 r_voxel_size=0.3
-q_voxel_size=0.015
-aff_num_qs=1
+q_voxel_size=0.02
+aff_num_qs=5
 energy=12700
 max_q=2.5
 num_cpus=8
-tukey_val=1
+tukey_val=0
