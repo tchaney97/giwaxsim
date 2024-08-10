@@ -7,6 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from numpy.fft import fftn, fftshift
 from multiprocessing import Pool, shared_memory
 import os
+from scipy.signal import tukey
 
 from tools.utilities import load_xyz, load_pdb, fft_gaussian, rotate_coords_z, get_element_f0_dict, get_element_f1_f2_dict
 from tools.ptable_dict import ptable, aff_dict
@@ -233,7 +234,7 @@ def convert_grid_qspace(density_grid, x_axis, y_axis, z_axis):
     return iq, qx_shifted, qy_shifted, qz_shifted
 
 def rotate_project_fft_coords(args):
-        coords, f_values, phi, grid_size, r_voxel_size, temp_folder = args
+        coords, f_values, phi, grid_size, r_voxel_size, temp_folder, tukey_val = args
         #rotate coords about phi
         coords_rot = rotate_coords_z(coords, phi)
 
@@ -258,6 +259,20 @@ def rotate_project_fft_coords(args):
 
         # Accumulate intensities in the corresponding pixels
         np.add.at(detector_grid, (z_indices, y_indices), valid_fs)
+
+        if tukey:
+            # Determine the region of interest (ROI) where data is located
+            y_max = np.max(y_indices)
+            z_max = np.max(z_indices)
+            
+            # Create a Tukey window specific to the ROI size
+            # You can adjust this tukey_val between 0 (rectangular) and 1 (Hanning)
+            tukey_y = tukey(y_max + 1, alpha=tukey_val)
+            tukey_z = tukey(z_max + 1, alpha=tukey_val)
+            roi_window = np.outer(tukey_y, tukey_z)
+            
+            # Apply the Tukey window to the corresponding region of the detector grid
+            detector_grid[:y_max + 1, :z_max + 1] *= roi_window
 
         # Calculate axis q-values
         q_h = np.fft.fftfreq(grid_size, d=r_voxel_size) * 2 * np.pi
@@ -372,7 +387,7 @@ def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
 
     return iq_3D
 
-def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_dir=None, num_cpus=None):
+def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_dir=None, num_cpus=None, tukey_val=0):
     """
     Low memory method for generating a 3D voxelized scattering intensity reciprocal space grid from .xyz file.
     A average electron density is optionally applied outside of the smallest
@@ -455,7 +470,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         #convert symbols to array of z_values used as f here
         # f_values = np.array([ptable[element] for element in elements])
         #parallel processing to generate frames used to construct iq_3D
-        args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder) for phi in phis]
+        args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, tukey_val) for phi in phis]
         with Pool(processes=num_cpus) as pool:
             filepaths = pool.map(rotate_project_fft_coords, args)
         master_iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz)
@@ -492,7 +507,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
             f_values = f0_values + f1_f2_values
 
             #parallel processing of frames rotating around phi
-            args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder) for phi in phis]
+            args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, tukey_val) for phi in phis]
             with Pool(processes=num_cpus) as pool:
                 filepaths = pool.map(rotate_project_fft_coords, args)
             #generate iq voxelgrid, mask out q's based on valid f0 range, add to master

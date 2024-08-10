@@ -21,6 +21,7 @@ def main(config):
     output_dir = config.get('output_dir', os.getcwd())
     num_cpus = int(config.get('num_cpus', os.cpu_count()))
     scratch_dir = config.get('scratch_dir', os.getcwd())
+    tukey_val = float(config.get('tukey_val', 0))
 
     if input_folder:
         input_paths = glob.glob(f'{input_folder}*{filetype}')
@@ -38,7 +39,8 @@ def main(config):
                                                     energy, 
                                                     gen_name, 
                                                     scratch_dir=scratch_dir, 
-                                                    num_cpus=num_cpus)
+                                                    num_cpus=num_cpus,
+                                                    tukey_val=tukey_val)
     
         # Optional downselect iq meshgrid based on max q desired
         iq_small, qx_small, qy_small, qz_small = downselect_voxelgrid(iq, qx, qy, qz, max_q)

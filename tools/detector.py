@@ -160,8 +160,8 @@ def rotate_about_vertical(det_x_grid, det_y_grid, det_z_grid, phi):
     
     return rot_x_grid, rot_y_grid, rot_z_grid
 
-# def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_grid, h_axis_vals, v_axis_vals):
-#     """
+def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_grid, h_axis_vals, v_axis_vals):
+    """
 #     This function calculates the intersection of intensity values from a 3D voxel grid by a detector
 #     plane defined by three 2D meshgrids. The function returns a 2D array representing the integrated
 #     values on the detector plane, as well as 1D arrays for the x and y coordinates of the detector.
@@ -180,15 +180,15 @@ def rotate_about_vertical(det_x_grid, det_y_grid, det_z_grid, phi):
 #     Returns:
 #     - det_ints (numpy.ndarray): A 2D array representing the integrated intensity values on the detector.
 #     """
-#     det_ints = np.zeros_like(det_x_grid)
-#     for row in range(len(v_axis_vals)):
-#         for col in range(len(h_axis_vals)):
-#             x_idx = np.argmin(np.abs(qx-det_x_grid[row,col]))
-#             y_idx = np.argmin(np.abs(qy-det_y_grid[row,col]))
-#             z_idx = np.argmin(np.abs(qz-det_z_grid[row,col]))
-#             det_ints[row, col] = int_voxels[y_idx, x_idx, z_idx]
+    det_ints = np.zeros_like(det_x_grid)
+    for row in range(len(v_axis_vals)):
+        for col in range(len(h_axis_vals)):
+            x_idx = np.argmin(np.abs(qx-det_x_grid[row,col]))
+            y_idx = np.argmin(np.abs(qy-det_y_grid[row,col]))
+            z_idx = np.argmin(np.abs(qz-det_z_grid[row,col]))
+            det_ints[row, col] = int_voxels[y_idx, x_idx, z_idx]
 
-#     return det_ints
+    return det_ints
 
 def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_grid):
     """
