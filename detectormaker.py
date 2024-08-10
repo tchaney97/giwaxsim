@@ -7,7 +7,7 @@ import os
 import argparse
 import time
 
-from tools.utilities import  parse_config_file, str_to_bool
+from tools.utilities import  parse_config_file, str_to_bool, save_config_to_txt
 from tools.detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
 from tools.detector import mirror_vertical_horizontal, generate_detector_ints
 
@@ -45,25 +45,25 @@ def main(config):
         raise Exception(f'Path does not exist: {save_path}')
     
     # load up 3D voxel grids from voxelgridmaker
-    iq = np.load(f'{save_path}{gen_name}_iq.npy')
-    qx = np.load(f'{save_path}{gen_name}_qx.npy')
-    qy = np.load(f'{save_path}{gen_name}_qy.npy')
-    qz = np.load(f'{save_path}{gen_name}_qz.npy')
+    iq = np.load(f'{save_path}/{gen_name}_iq.npy')
+    qx = np.load(f'{save_path}/{gen_name}_qx.npy')
+    qy = np.load(f'{save_path}/{gen_name}_qy.npy')
+    qz = np.load(f'{save_path}/{gen_name}_qz.npy')
 
     # make save paths
-    det_sum_path = f'{save_path}{gen_name}_det_sum/'
+    det_sum_path = f'{save_path}/{gen_name}_det_sum/'
     i = 0
     while os.path.exists(det_sum_path):
         i += 1
-        det_sum_path = f'{save_path}{gen_name}_det_sum{i}/'
+        det_sum_path = f'{save_path}/{gen_name}_det_sum{i}/'
     os.mkdir(det_sum_path)
 
     if not scratch_folder:
         scratch_folder = save_path
     if i > 0:
-        det_save_path = f'{scratch_folder}{gen_name}_det_imgs{i}/'
+        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs{i}/'
     else:
-        det_save_path = f'{scratch_folder}{gen_name}_det_imgs/'
+        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs/'
 
     # shouldnt already exist but just in case
     if not os.path.exists(det_save_path):
@@ -95,8 +95,8 @@ def main(config):
     if angle_init_ax3=='theta':
         det_x, det_y, det_z = rotate_about_horizontal(det_x, det_y, det_z, angle_init_val3)
         
-    np.save(f'{det_sum_path}{gen_name}_det_h.npy', det_h)
-    np.save(f'{det_sum_path}{gen_name}_det_v.npy', det_v)
+    np.save(f'{det_sum_path}/{gen_name}_det_h.npy', det_h)
+    np.save(f'{det_sum_path}/{gen_name}_det_v.npy', det_v)
 
     # Set up rotations to capture disorder in your film. psi=tilting, phi=fiber texture
     # Only need 1/4 of your total rotation space since symmetry allows us to mirror quadrants
@@ -121,7 +121,7 @@ def main(config):
         det_sum = mirror_vertical_horizontal(det_sum)
     det_sum[det_sum != det_sum] = 1e-6
     det_sum[det_sum <= 0] = 1e-6
-    np.save(f'{det_sum_path}{gen_name}_det_sum.npy', det_sum)
+    np.save(f'{det_sum_path}/{gen_name}_det_sum.npy', det_sum)
 
     if cleanup:
         for filepath in filenames:
@@ -145,7 +145,7 @@ def main(config):
     ax1.set_ylim(bottom=0)
     cbar = fig.colorbar(cax, ax=ax1)
     plt.tight_layout()
-    plt.savefig(f'{save_path}{gen_name}_det_sum_log.png', dpi=300)
+    plt.savefig(f'{save_path}/{gen_name}_det_sum_log.png', dpi=300)
 
     fig, ax1 = subplots()
     cax = ax1.imshow(det_sum,
@@ -158,7 +158,9 @@ def main(config):
     ax1.set_ylim(bottom=0)
     cbar = fig.colorbar(cax, ax=ax1)
     plt.tight_layout()
-    plt.savefig(f'{save_path}{gen_name}_det_sum_lin.png', dpi=300)
+    plt.savefig(f'{save_path}/{gen_name}_det_sum_lin.png', dpi=300)
+
+    save_config_to_txt(config, f'{save_path}/{gen_name}_config.txt')
 
 if __name__ == "__main__":
     start = time.time()

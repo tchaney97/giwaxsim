@@ -2,6 +2,7 @@ import numpy as np
 from collections import Counter
 import xraydb
 import re
+import os
 from tools.ptable_dict import ptable, aff_dict
 
 def str_to_bool(input_str):
@@ -20,6 +21,16 @@ def parse_config_file(file_path):
                 key, value = line.strip().split('=', 1)
                 config[key] = value
     return config
+
+def save_config_to_txt(config, save_path):
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
+    
+    config_file_path = f'{save_path}_config.txt'
+    
+    with open(config_file_path, 'w') as config_file:
+        for key, value in config.items():
+            config_file.write(f"{key}={value}\n")
 
 def strip_numbers(element):
         match = re.match(r"([a-zA-Z]+)", element)

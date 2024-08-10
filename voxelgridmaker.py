@@ -4,7 +4,7 @@ import os
 import argparse
 import time
 
-from tools.utilities import parse_config_file, most_common_element
+from tools.utilities import parse_config_file, most_common_element, save_config_to_txt
 from tools.voxelgrids import downselect_voxelgrid, add_f0_q_3d, generate_voxel_grid_low_mem
 
 def main(config):
@@ -20,11 +20,11 @@ def main(config):
     max_q = float(config.get('max_q', 2.5))
     output_dir = config.get('output_dir', os.getcwd())
     num_cpus = int(config.get('num_cpus', os.cpu_count()))
-    scratch_dir = config.get('scratch_dir', os.getcwd())
+    scratch_folder = config.get('scratch_folder', os.getcwd())
     tukey_val = float(config.get('tukey_val', 0))
 
     if input_folder:
-        input_paths = glob.glob(f'{input_folder}*{filetype}')
+        input_paths = glob.glob(f'{input_folder}/*{filetype}')
     elif input_filepath:
         input_paths = [input_filepath]
     else:
@@ -38,7 +38,7 @@ def main(config):
                                                     aff_num_qs, 
                                                     energy, 
                                                     gen_name, 
-                                                    scratch_dir=scratch_dir, 
+                                                    scratch_folder=scratch_folder, 
                                                     num_cpus=num_cpus,
                                                     tukey_val=tukey_val)
     
@@ -78,6 +78,8 @@ def main(config):
     np.save(f'{save_path}{gen_name}_qx.npy', qx)
     np.save(f'{save_path}{gen_name}_qy.npy', qy)
     np.save(f'{save_path}{gen_name}_qz.npy', qz)
+
+    save_config_to_txt(config, f'{save_path}/{gen_name}_config.txt')
 
 if __name__ == "__main__":
     start = time.time()
