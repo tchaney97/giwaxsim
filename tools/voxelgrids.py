@@ -127,6 +127,8 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
         #use f=f1+jf2
         f1_f2_dict = get_element_f1_f2_dict(energy, elements)
         f_values = np.array([f1_f2_dict[element] for element in elements])
+        z_values = np.array([ptable[element] for element in elements])
+        f_values += z_values
         #convert symbols to array of z_values used as f here
         # f_values = np.array([ptable[element] for element in elements])
 
@@ -147,7 +149,6 @@ def generate_voxel_grid_high_mem(input_path, r_voxel_size, q_voxel_size, max_q, 
     elif aff_num_qs > 1:
         f1_f2_dict = get_element_f1_f2_dict(energy, elements)
         f1_f2_values = np.array([f1_f2_dict[element] for element in elements])
-        z_values = np.array([ptable[element] for element in elements])
         #build iq voxelgrid over many q values for proper f0(q)
         for i, aff_q_num in range(int(aff_num_qs)):
             # Create an empty grid
@@ -467,8 +468,9 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         #use f=f1+jf2
         f1_f2_dict = get_element_f1_f2_dict(energy, elements)
         f_values = np.array([f1_f2_dict[element] for element in elements], dtype=complex)
-        #convert symbols to array of z_values used as f here
-        # f_values = np.array([ptable[element] for element in elements])
+        # xraydb chantler lookup defines f1=f' and f2=f" contrary to convention
+        z_values = np.array([ptable[element] for element in elements])
+        f_values += z_values
         #parallel processing to generate frames used to construct iq_3D
         args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, tukey_val) for phi in phis]
         with Pool(processes=num_cpus) as pool:
