@@ -1,5 +1,16 @@
 import numpy as np
+from collections import Counter
+import xraydb
 import re
+from tools.ptable_dict import ptable, aff_dict
+
+def str_to_bool(input_str):
+    if input_str.lower() == 'true':
+        return True
+    elif input_str.lower() == 'false':
+        return False
+    else:
+        raise ValueError("Invalid input: Expected 'True' or 'False'")
 
 def parse_config_file(file_path):
     config = {}
@@ -14,22 +25,74 @@ def strip_numbers(element):
         match = re.match(r"([a-zA-Z]+)", element)
         return match.group(1) if match else element
 
+def most_common_element(input_path):
+    # Extracting the atomic symbols and positions from the xyz file
+    if input_path[-3:] == 'xyz':
+        coords, elements = load_xyz(input_path)
+    elif input_path[-3:] == 'pdb':
+        coords, elements = load_pdb(input_path)
+    else:
+        raise Exception('files must be a .pdb or .xyz file')
+    del coords
+    # Use Counter to count the frequency of each element in the array
+    element_counts = Counter(elements)
+    # Find the most common element
+    most_common = element_counts.most_common(1)[0][0]
+    return most_common
+
+# def load_xyz(xyz_path):
+#     """
+#     Parameters:
+#     - xyz_path: string, path to xyz file of molecule, NP, etc
+
+#     Returns:
+#     -coords: 2D numpy array of x,y,z coordinates
+#     -elements: 1D numpy array of element species for each coord in coords
+#     """
+#     # Extracting the atomic symbols and positions from the xyz file
+#     with open(xyz_path, 'r') as file:
+#         lines = file.readlines()
+#     # Extracting atom data
+#     atom_data = [line.split() for line in lines[2:] if len(line.split()) == 4]
+#     symbols, coords = zip(*[(strip_numbers(parts[0]), np.array(list(map(float, parts[1:])))) for parts in atom_data])
+
+#     coords = np.array(coords)
+#     elements = np.array(symbols)
+    
+#     return coords, elements
+
 def load_xyz(xyz_path):
     """
+    Loads the atomic symbols and coordinates from an XYZ file.
+
     Parameters:
-    - xyz_path: string, path to xyz file of molecule, NP, etc
+    - xyz_path: string, path to xyz file of molecule, NP, etc.
 
     Returns:
-    -coords: 2D numpy array of x,y,z coordinates
-    -elements: 1D numpy array of element species for each coord in coords
+    - coords: 2D numpy array of x, y, z coordinates.
+    - elements: 1D numpy array of element species for each coord in coords.
     """
-    # Extracting the atomic symbols and positions from the xyz file
+    # Extracting the atomic symbols and positions from the XYZ file
     with open(xyz_path, 'r') as file:
         lines = file.readlines()
-    # Extracting atom data
-    atom_data = [line.split() for line in lines[2:] if len(line.split()) == 4]
-    symbols, coords = zip(*[(strip_numbers(parts[0]), np.array(list(map(float, parts[1:])))) for parts in atom_data])
-
+    symbols = []
+    coords = []
+    for line in lines[2:]:  # Skipping the first two lines (header and comment)
+        parts = line.split()
+        if len(parts) < 4:
+            # Skip lines that do not have at least 4 parts (symbol + 3 coordinates)
+            print(f"Skipping line due to insufficient parts: {line.strip()}")
+            continue
+        try:
+            symbol = strip_numbers(parts[0])
+            x, y, z = map(float, parts[1:4])
+            symbols.append(symbol)
+            coords.append([x, y, z])
+        except ValueError as e:
+            # Skip lines where conversion to float fails or any other issue arises
+            print(f"Skipping line due to error: {line.strip()} ({e})")
+            continue
+    # Convert lists to numpy arrays
     coords = np.array(coords)
     elements = np.array(symbols)
     
@@ -169,3 +232,68 @@ def calc_real_space_abc(a_mag, b_mag, c_mag, alpha_deg, beta_deg, gamma_deg):
     c = np.array([cx, cy, cz])
     
     return a, b, c
+
+def rotate_coords_z(coords, phi):
+    # Convert phi to radians
+    phi_rad = np.radians(phi)
+    
+    # Define the rotation matrix for rotation about the z-axis
+    rotation_matrix = np.array([
+        [np.cos(phi_rad), -np.sin(phi_rad), 0],
+        [np.sin(phi_rad), np.cos(phi_rad), 0],
+        [0, 0, 1]
+    ])
+    
+    # Apply the rotation matrix to each coordinate
+    rotated_coords = np.dot(coords, rotation_matrix.T)
+    
+    return rotated_coords
+
+def get_element_f0_dict(q_val, elements):
+    """
+    gets f0 atomic form factor value for each unique element in elements at specified q_value:
+    - q_val: (float) q value in Å^-1 to evaluate f0 for each element
+    - elements: 1D array of element symbols as strings
+    returns:
+    - f0_dict: dictionary with element symbol as keys and f0 values
+    """
+    unique_elements = set(elements)
+    f0_dict = {}
+    for element in unique_elements:
+        aff = aff_dict[element]
+
+        f0_val = (
+                    aff[0]*np.exp(-aff[1]*(q_val)/(16*np.pi**2))+
+                    aff[2]*np.exp(-aff[3]*(q_val)/(16*np.pi**2))+
+                    aff[4]*np.exp(-aff[5]*(q_val)/(16*np.pi**2))+
+                    aff[6]*np.exp(-aff[7]*(q_val)/(16*np.pi**2))+
+                    aff[8])
+        f0_dict[element] = f0_val
+
+    return f0_dict
+
+def get_element_f1_f2_dict(energy, elements):
+    """
+    Gets f1 and f2 anomalous scattering factor values for each unique element in elements at specified energy.
+    
+    Parameters:
+    - energy (float): Energy in eV at which to evaluate f1 and f2 for each element.
+    - elements (list of str): 1D array of element symbols as strings.
+    
+    Returns:
+    - f1_f2_dict (dict): Dictionary with element symbols as keys and complex f1 + j*f2 values as values.
+    """
+    unique_elements = set(elements)
+    f1_f2_dict = {}
+    for element in unique_elements:
+        try:
+            f1_val = xraydb.f1_chantler(element, energy)
+            f2_val = xraydb.f2_chantler(element, energy)
+            f1_f2_val = f1_val+1j*f2_val
+            f1_f2_dict[element] = f1_f2_val
+        except KeyError:
+            print(f"Data for element '{element}' at energy {energy} eV not found.")
+        except Exception as e:
+            print(f"An error occurred for element '{element}': {e}")
+
+    return f1_f2_dict

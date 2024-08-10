@@ -162,6 +162,36 @@ def rotate_about_vertical(det_x_grid, det_y_grid, det_z_grid, phi):
 
 def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_grid, h_axis_vals, v_axis_vals):
     """
+#     This function calculates the intersection of intensity values from a 3D voxel grid by a detector
+#     plane defined by three 2D meshgrids. The function returns a 2D array representing the integrated
+#     values on the detector plane, as well as 1D arrays for the x and y coordinates of the detector.
+
+#     Parameters:
+#     - int_voxels (numpy.ndarray): A 3D array of intensity values in the voxel grid.
+#     - qx (numpy.ndarray): A 3D array representing the x-coordinates in the voxel grid.
+#     - qy (numpy.ndarray): A 3D array representing the y-coordinates in the voxel grid.
+#     - qz (numpy.ndarray): A 3D array representing the z-coordinates in the voxel grid.
+#     - det_x_grid: 2D array of x-coordinates of the detector
+#     - det_y_grid: 2D array of y-coordinates of the detector
+#     - det_z_grid: 2D array of z-coordinates of the detector
+#     - h_axis_vals: 1D numpy array describing q values along horizontal axis
+#     - v_axis_vals: 1D numpy array describing q values along vertical axis
+
+#     Returns:
+#     - det_ints (numpy.ndarray): A 2D array representing the integrated intensity values on the detector.
+#     """
+    det_ints = np.zeros_like(det_x_grid)
+    for row in range(len(v_axis_vals)):
+        for col in range(len(h_axis_vals)):
+            x_idx = np.argmin(np.abs(qx-det_x_grid[row,col]))
+            y_idx = np.argmin(np.abs(qy-det_y_grid[row,col]))
+            z_idx = np.argmin(np.abs(qz-det_z_grid[row,col]))
+            det_ints[row, col] = int_voxels[y_idx, x_idx, z_idx]
+
+    return det_ints
+
+def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_grid):
+    """
     This function calculates the intersection of intensity values from a 3D voxel grid by a detector
     plane defined by three 2D meshgrids. The function returns a 2D array representing the integrated
     values on the detector plane, as well as 1D arrays for the x and y coordinates of the detector.
@@ -174,19 +204,29 @@ def intersect_detector(int_voxels, qx, qy, qz, det_x_grid, det_y_grid, det_z_gri
     - det_x_grid: 2D array of x-coordinates of the detector
     - det_y_grid: 2D array of y-coordinates of the detector
     - det_z_grid: 2D array of z-coordinates of the detector
-    - h_axis_vals: 1D numpy array describing q values along horizontal axis
-    - v_axis_vals: 1D numpy array describing q values along vertical axis
 
     Returns:
     - det_ints (numpy.ndarray): A 2D array representing the integrated intensity values on the detector.
     """
-    det_ints = np.zeros_like(det_x_grid)
-    for row in range(len(v_axis_vals)):
-        for col in range(len(h_axis_vals)):
-            x_idx = np.argmin(np.abs(qx-det_x_grid[row,col]))
-            y_idx = np.argmin(np.abs(qy-det_y_grid[row,col]))
-            z_idx = np.argmin(np.abs(qz-det_z_grid[row,col]))
-            det_ints[row, col] = int_voxels[y_idx, x_idx, z_idx]
+
+    actual_q_voxel = np.diff(qz)[0] #voxels are cubes
+    det_x_vals = det_x_grid.flatten()
+    det_y_vals = det_y_grid.flatten()
+    det_z_vals = det_z_grid.flatten()
+    det_x_indices = ((det_x_vals-np.min(qx)) // actual_q_voxel).astype(int)
+    det_y_indices = ((det_y_vals-np.min(qy)) // actual_q_voxel).astype(int)
+    det_z_indices = ((det_z_vals-np.min(qz)) // actual_q_voxel).astype(int)
+
+    # Ensure indices are within bounds
+    det_x_indices = np.clip(det_x_indices, 0, int_voxels.shape[1] - 1)
+    det_y_indices = np.clip(det_y_indices, 0, int_voxels.shape[0] - 1)
+    det_z_indices = np.clip(det_z_indices, 0, int_voxels.shape[2] - 1)
+
+    # Pull intensity values from the voxel grid using the calculated indices
+    det_ints_flat = int_voxels[det_y_indices, det_x_indices, det_z_indices]
+
+    # Reshape the flat 1D array back into the 2D shape of the detector grid
+    det_ints = det_ints_flat.reshape(det_x_grid.shape)
 
     return det_ints
 
@@ -247,7 +287,9 @@ def generate_detector_ints(args):
     """
     iq,qx,qy,qz,det_h,det_v,det_x,det_y,det_z,psi,phi,theta,save_path = args
     det_x2, det_y2, det_z2 = rotate_psi_phi_theta(det_x, det_y, det_z, psi, phi, theta)
-    det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2, det_h, det_v)
+    det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2)
+    # det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2, det_h, det_v)
     filename = f'{save_path}det_ints_psi{psi:.0f}_phi{phi:.0f}_theta{theta:.0f}.npy'
     np.save(filename, det_int)
     return filename
+

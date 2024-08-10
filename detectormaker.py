@@ -2,17 +2,14 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
-from numpy.fft import fftn, fftshift
-import glob
 from multiprocessing import Pool
 import os
 import argparse
+import time
 
-from tools.ptable_dict import ptable, atomic_masses
-from tools.utilities import rotation_matrix, parse_config_file
-from tools.voxelgrids import generate_density_grid, convert_grid_qspace, downselect_meshgrid, multiply_ft_gaussian
+from tools.utilities import  parse_config_file, str_to_bool
 from tools.detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
-from tools.detector import intersect_detector, rotate_psi_phi_theta, mirror_vertical_horizontal, generate_detector_ints
+from tools.detector import mirror_vertical_horizontal, generate_detector_ints
 
 def main(config):
     # Input Parameters 
@@ -35,6 +32,10 @@ def main(config):
     theta_start = float(config.get('theta_start'))
     theta_end = float(config.get('theta_end'))
     theta_num = int(config.get('theta_num'))
+    mirror = str_to_bool(config.get('mirror', False))
+    cleanup = str_to_bool(config.get('cleanup', False))
+    num_cpus = int(config.get('num_cpus', os.cpu_count()))
+
 
     # dirr = os.getcwd()
     # save_path = f'{dirr}/{gen_name}_output_files/'
@@ -42,17 +43,28 @@ def main(config):
     if not os.path.exists(save_path):
         raise Exception(f'Path does not exist: {save_path}')
     
+    # load up 3D voxel grids from voxelgridmaker
     iq = np.load(f'{save_path}{gen_name}_iq.npy')
     qx = np.load(f'{save_path}{gen_name}_qx.npy')
     qy = np.load(f'{save_path}{gen_name}_qy.npy')
     qz = np.load(f'{save_path}{gen_name}_qz.npy')
 
-    det_save_path = f'{save_path}{gen_name}_det_imgs/'
+    # make save paths
+    det_sum_path = f'{save_path}{gen_name}_det_sum/'
     i = 0
-    while os.path.exists(det_save_path):
+    while os.path.exists(det_sum_path):
         i += 1
+        det_sum_path = f'{save_path}{gen_name}_det_sum{i}/'
+    os.mkdir(det_sum_path)
+
+    if i > 0:
         det_save_path = f'{save_path}{gen_name}_det_imgs{i}/'
-    os.mkdir(det_save_path)
+    else:
+        det_save_path = f'{save_path}{gen_name}_det_imgs/'
+
+    # shouldnt already exist but just in case
+    if not os.path.exists(det_save_path):
+        os.mkdir(det_save_path)
 
     det_pixels = (num_pixels, num_pixels) # horizontal, vertical
     det_qs = (max_q, max_q) # horizontal, vertical
@@ -79,15 +91,9 @@ def main(config):
         det_x, det_y, det_z = rotate_about_vertical(det_x, det_y, det_z, angle_init_val3)
     if angle_init_ax3=='theta':
         det_x, det_y, det_z = rotate_about_horizontal(det_x, det_y, det_z, angle_init_val3)
-
-    if i > 0:
-        det_dim_path = f'{save_path}{gen_name}_det_dims{i}/'
-    else:
-        det_dim_path = f'{save_path}{gen_name}_det_dims/'
-    os.mkdir(det_dim_path)
         
-    np.save(f'{det_dim_path}{gen_name}_det_h.npy', det_h)
-    np.save(f'{det_dim_path}{gen_name}_det_v.npy', det_v)
+    np.save(f'{det_sum_path}{gen_name}_det_h.npy', det_h)
+    np.save(f'{det_sum_path}{gen_name}_det_v.npy', det_v)
 
     # Set up rotations to capture disorder in your film. psi=tilting, phi=fiber texture
     # Only need 1/4 of your total rotation space since symmetry allows us to mirror quadrants
@@ -96,7 +102,7 @@ def main(config):
     thetas = np.linspace(theta_start, theta_end, num=int(theta_num)) # rotation in degrees of detector about detector horizontal axis
 
     args_list = [(iq, qx, qy, qz, det_h, det_v, det_x, det_y, det_z, psi, phi, theta, det_save_path) for psi in psis for phi in phis for theta in thetas]
-    with Pool(processes=os.cpu_count()) as pool:
+    with Pool(processes=num_cpus) as pool:
         filenames = pool.map(generate_detector_ints, args_list)
 
     det_files = filenames
@@ -108,8 +114,22 @@ def main(config):
             det_sum += det_img
 
     # Fold detector sum image to capture full orientational space
-    det_sum = mirror_vertical_horizontal(det_sum)
-    np.save(f'{save_path}{gen_name}_det_sum.npy', det_sum)
+    if mirror:
+        det_sum = mirror_vertical_horizontal(det_sum)
+    det_sum[det_sum != det_sum] = 1e-6
+    det_sum[det_sum <= 0] = 1e-6
+    np.save(f'{det_sum_path}{gen_name}_det_sum.npy', det_sum)
+
+    if cleanup:
+        for filepath in filenames:
+            try:
+                os.remove(filepath)
+            except OSError as e:
+                print(f"Error deleting file {filepath}: {e}")
+        try:
+            os.rmdir(det_save_path)
+        except OSError as e:
+            print(f"Error deleting directory {det_save_path}: {e}")
 
     fig, ax1 = subplots()
     cax = ax1.imshow(det_sum,
@@ -138,6 +158,7 @@ def main(config):
     plt.savefig(f'{save_path}{gen_name}_det_sum_lin.png', dpi=300)
 
 if __name__ == "__main__":
+    start = time.time()
     parser = argparse.ArgumentParser(description="Process a configuration file.")
     parser.add_argument('--config', type=str, required=True, help='Path to the configuration file')
     
@@ -146,3 +167,6 @@ if __name__ == "__main__":
     config_path = args.config
     config = parse_config_file(config_path)
     main(config)
+    end = time.time()
+    runtime = end-start
+    print(f'\nTotal Time: {str(runtime)}')

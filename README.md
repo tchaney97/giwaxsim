@@ -4,41 +4,47 @@ This repository contains scripts for generating forward simulations of GIWAXS (G
 ![gif of detector intersection of reciprocal space](sample_images/sidebyside5.gif)
 
 ## Requirements:
-- Python 3
+- Python >= 3.8
 - numpy
 - matplotlib
 - fabio
 - scipy
+- xraydb
 
 ## Usage:
 Forward simulations are created through two different scripts: `voxelgridmaker.py` and `detectormaker.py`. These scripts are intended to be run in the command line with a single argument pointing to the configuration file (ex: `python voxelgridmaker.py --config /path/to/config_file.txt`). Details of these scripts and their configuration file formats are described below:
 
-### voxelgridmaker.py:
-This script takes a `.xyz` or `.pdb` structure file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup> through the following steps:
-1. Mapping the structure file onto an electron density voxel grid.
-2. Taking the FFT of the electron density voxel grid.
-3. Taking amplitude of values, recentering axes, converting to q-units, and applying a general atomic form factor.
-4. Cropping reciprocal space voxel grid to relevant q-values and saving them for later use.
+### voxelgridmaker.py: 
+This script takes a `.xyz` or `.pdb` structure file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup>. With example config values this runs in <5min on M2 macbook air. The script runs through the following steps:
+1. Projecting material coordinates onto the y-z plane.
+2. Assigning each material coordinate a complex atomic scattering factor "f".
+3. Optionally windowing the 2D grid of "f" values to prevent termination ripples.
+4. Taking the norm squared of 2D FFT on the "f" values, converting axes to q-space in Å<sup>-1</sup>, re-centering, and saving.
+5. Rotating the material coordinates by some calculated delta phi and repeating steps 1-4 until 180 degrees rotation
+6. Taking each detector slice and binning it into an evenly spaced 3D I(qx,qy,qz) voxel grid based on rotation. Bins are averaged at the end
+8. Cropping reciprocal space voxel grid to relevant q-values and saving them for later use.
 
 Configuration file parameters:\
-An example configuration file is in `/config_templates/voxelgridmaker_config.txt`
-- `input_filepath`=(string) path to a `.xyz` file for I(q) voxelgrid from single file
-- `input_folder`=(string) path to a folder of `.xyz` or `.pdb` files for average I(q) from many files
+An example configuration file is in `/config_templates/voxelgridmaker_highmem_config.txt`
+- `input_filepath`=(string) optionally a path to a `.xyz` file for I(q) voxelgrid from single file
+- `input_folder`=(string) optionally a path to a folder of `.xyz` or `.pdb` files for average I(q) from many files
 - `gen_name`=(string) a short sample name used to create directories and output files.
-- `voxel_size`=(positive float) side length dimension of square real-space voxels in Å.
-- `min_ax_size`=(positive integer) minimum number of voxels along each axis.
-- `f0_element`=(string) elemental symbol for z-normalized f0(q) scaling.
+- `r_voxel_size`=(positive float) side length dimension of square real-space voxels in Å.
+- `q_voxel_size`=(positive float) side length dimension of square reciprocal-space voxels in Å<sup>-1</sup>.
+- `aff_num_qs`=(positive integer) number of q bins to evaluate atomic scattering factor f0(q).
+- `energy`=(positive float) X-ray energy in eV for simulation of f' and f" scattering factors
 - `max_q`=(positive float) determines the q-value to which the iq voxel grid is cropped.
-- `output_dir`=(string) path to output directory; if not defined, `os.get_cwd()` is used.
+- `output_dir`=(string) optional path to output directory; if not defined, `os.get_cwd()` is used.
+- `num_cpus`=(positive integer) number of cpu cores to utilize for multiprocessing
+- `tukey_val`=(positive float) between 0 and 1 to describe (scipy) tukey window. default 0 does not window data
 
 Tips:
-- It is advantageous to choose an axis length that is larger than the slab described by the `.xyz` file. This “padding” can lower the bin size of the FFT, resulting in better q-resolution.
-- For computation speed, `min_ax_length` should ideally be a power of 2. Avoid primes.
-- Carefully choose the real-space voxel dimension since it will carry over as q-uncertainty.
-- The slabs described by the `.xyz` file should be orthorhombic to allow for the code to properly pad with an average electron density to best prevent termination ripples in reciprocal space.
+- `r_voxel_size` and `q_voxel_size` determine your q-uncertainty and q-resolution respectively. Choosing a small `r_voxel_size` and small `q_voxel_size` requires very large arrays that will utilize more memory and slow the simulation. Reasonable values for PC use are in example config files
+- `aff_num_qs` can determine how accurate your f0(q) values are. Appreciable differences in polymer scattering patterns have been found between using 1 and 5. Note that computation time increases linearly with `aff_num_qs` so it is recommended not to exceed 10.
+- if using tukey windowing the slabs described by the `.xyz` file should be orthorhombic (slabmaker.py can do this for you) 
 
 ### detectormaker.py:
-This script loads the iq reciprocal space voxel grid and associated axes generated by `voxelgridmaker.py` and uses them to populate scattering intensity on a 2D detector plane at various geometries. These geometries are summed to produce a final “det_sum” as the simulated GIWAXS. The steps are:
+This script loads the iq reciprocal space voxel grid and associated axes generated by `voxelgridmaker.py` and uses them to populate scattering intensity on a 2D detector plane at various geometries. These geometries are summed to produce a final “det_sum” as the simulated GIWAXS. With example config values this runs in ~30s on M2 macbook air. The steps are:
 1. Initializing detector plane size, resolution, and orientation.
 2. Intersecting detector pixels with scattering intensity voxels.
 3. Saving detector intensities at that orientation.
@@ -98,6 +104,28 @@ Script in progress. Current tools are contained in jupyter notebooks in the `tes
 
 ### estimateresources.py:
 Script in progress. Current tools are contained in jupyter notebooks in the `test_notebooks` folder.
+
+### voxelgridmaker_highmem.py: 
+*Note this is a legacy method that is much less computationally and memory efficient than the new implimentation in voxelgridmaker.py text*
+
+This script takes a `.xyz` or `.pdb` structure file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup> through the following steps:
+1. Mapping the structure file onto an electron density voxel grid.
+2. Taking the 3DFFT of the electron density voxel grid.
+3. Taking amplitude of values, recentering axes, converting to q-units, and applying a general atomic form factor.
+4. Cropping reciprocal space voxel grid to relevant q-values and saving them for later use.
+
+Configuration file parameters:\
+An example configuration file is in `/config_templates/voxelgridmaker_highmem_config.txt`
+- `input_filepath`=(string) optionally a path to a `.xyz` file for I(q) voxelgrid from single file
+- `input_folder`=(string) optionally a path to a folder of `.xyz` or `.pdb` files for average I(q) from many files
+- `gen_name`=(string) a short sample name used to create directories and output files.
+- `r_voxel_size`=(positive float) side length dimension of square real-space voxels in Å.
+- `q_voxel_size`=(positive float) side length dimension of square reciprocal-space voxels in Å^-1.
+- `aff_num_qs`=(positive integer) number of q bins to evaluate atomic scattering factor f0(q).
+- `energy`=(positive float) X-ray energy in eV for simulation of f' and f" scattering factors
+- `max_q`=(positive float) determines the q-value to which the iq voxel grid is cropped.
+- `output_dir`=(string) optional path to output directory; if not defined, `os.get_cwd()` is used.
+- `bkg_edens`=(any) pad .xyz file with average "background" electron densitydefault to False, set to 1 (or anything) for True.
 
 ## To do:
 - Implement analytical FT from Ty’s code?
