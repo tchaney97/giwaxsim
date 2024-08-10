@@ -35,7 +35,7 @@ def main(config):
     mirror = str_to_bool(config.get('mirror', False))
     cleanup = str_to_bool(config.get('cleanup', False))
     num_cpus = int(config.get('num_cpus', os.cpu_count()))
-    scratch_path = config.get('scratch_path', False)
+    scratch_folder = config.get('scratch_folder', False)
 
 
     # dirr = os.getcwd()
@@ -58,12 +58,12 @@ def main(config):
         det_sum_path = f'{save_path}{gen_name}_det_sum{i}/'
     os.mkdir(det_sum_path)
 
-    if not scratch_path:
-        scratch_path = save_path
+    if not scratch_folder:
+        scratch_folder = save_path
     if i > 0:
-        det_save_path = f'{scratch_path}{gen_name}_det_imgs{i}/'
+        det_save_path = f'{scratch_folder}{gen_name}_det_imgs{i}/'
     else:
-        det_save_path = f'{scratch_path}{gen_name}_det_imgs/'
+        det_save_path = f'{scratch_folder}{gen_name}_det_imgs/'
 
     # shouldnt already exist but just in case
     if not os.path.exists(det_save_path):
