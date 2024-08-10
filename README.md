@@ -4,6 +4,7 @@ This repository contains scripts for generating forward simulations of GIWAXS (G
 ![gif of detector intersection of reciprocal space](sample_images/sidebyside5.gif)
 
 ## Requirements:
+- Most simulations can be ran on personal computer, but depending on simulation size and resolution high performance computers may be needed
 - Python >= 3.8
 - numpy
 - matplotlib
