@@ -388,7 +388,7 @@ def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
 
     return iq_3D
 
-def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_dir=None, num_cpus=None, tukey_val=0):
+def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_folder=None, num_cpus=None, tukey_val=0):
     """
     Low memory method for generating a 3D voxelized scattering intensity reciprocal space grid from .xyz file.
     A average electron density is optionally applied outside of the smallest
@@ -455,8 +455,8 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
     phis = np.linspace(0,last_phi, num=phi_num)
 
     #save in some scratch folder to combine into voxelgrid later
-    if scratch_dir:
-        folder = scratch_dir
+    if scratch_folder:
+        folder = scratch_folder
     else:
         folder = os.getcwd()
     temp_folder = f'{folder}/tempfiles'

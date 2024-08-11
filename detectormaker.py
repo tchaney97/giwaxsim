@@ -51,19 +51,19 @@ def main(config):
     qz = np.load(f'{save_path}/{gen_name}_qz.npy')
 
     # make save paths
-    det_sum_path = f'{save_path}/{gen_name}_det_sum/'
+    det_sum_path = f'{save_path}/{gen_name}_det_sum'
     i = 0
     while os.path.exists(det_sum_path):
         i += 1
-        det_sum_path = f'{save_path}/{gen_name}_det_sum{i}/'
+        det_sum_path = f'{save_path}/{gen_name}_det_sum{i}'
     os.mkdir(det_sum_path)
 
     if not scratch_folder:
         scratch_folder = save_path
     if i > 0:
-        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs{i}/'
+        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs{i}'
     else:
-        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs/'
+        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs'
 
     # shouldnt already exist but just in case
     if not os.path.exists(det_save_path):

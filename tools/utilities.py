@@ -23,12 +23,7 @@ def parse_config_file(file_path):
     return config
 
 def save_config_to_txt(config, save_path):
-    if not os.path.exists(save_path):
-        os.mkdir(save_path)
-    
-    config_file_path = f'{save_path}_config.txt'
-    
-    with open(config_file_path, 'w') as config_file:
+    with open(save_path, 'w') as config_file:
         for key, value in config.items():
             config_file.write(f"{key}={value}\n")
 

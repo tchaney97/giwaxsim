@@ -70,14 +70,14 @@ def main(config):
         iq = add_f0_q_3d(iq, qx, qy, qz, f0_element)
 
     # Save
-    save_path = f'{output_dir}/{gen_name}_output_files/'
+    save_path = f'{output_dir}/{gen_name}_output_files'
     if not os.path.exists(save_path):
         os.mkdir(save_path)
         
-    np.save(f'{save_path}{gen_name}_iq.npy', iq)
-    np.save(f'{save_path}{gen_name}_qx.npy', qx)
-    np.save(f'{save_path}{gen_name}_qy.npy', qy)
-    np.save(f'{save_path}{gen_name}_qz.npy', qz)
+    np.save(f'{save_path}/{gen_name}_iq.npy', iq)
+    np.save(f'{save_path}/{gen_name}_qx.npy', qx)
+    np.save(f'{save_path}/{gen_name}_qy.npy', qy)
+    np.save(f'{save_path}/{gen_name}_qz.npy', qz)
 
     save_config_to_txt(config, f'{save_path}/{gen_name}_config.txt')
 

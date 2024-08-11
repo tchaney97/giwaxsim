@@ -1,4 +1,4 @@
-iq_output_folder=./N2200lowmem_output_files/
+iq_output_folder=./N2200lowmem_output_files
 gen_name=N2200lowmem
 max_q=2.5
 num_pixels=500
