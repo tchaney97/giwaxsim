@@ -13,7 +13,7 @@ This repository contains scripts for generating forward simulations of GIWAXS (G
 - xraydb
 
 ## Usage:
-Forward simulations are created through two different scripts: `voxelgridmaker.py` and `detectormaker.py`. These scripts are intended to be run in the command line with a single argument pointing to the configuration file (ex: `python voxelgridmaker.py --config /path/to/config_file.txt`). Details of these scripts and their configuration file formats are described below:
+Forward simulations are created through two different scripts: `voxelgridmaker.py` and `detectormaker.py`. These scripts are intended to be run in the command line with a single argument pointing to the configuration file (ex: `python voxelgridmaker.py --config /path/to/config_file.txt`). Details of these scripts and their configuration file formats are described below. Note that whenever a directory is input as a string please do **not** include the trailing `/`:
 
 ### voxelgridmaker.py: 
 This script takes a `.xyz` or `.pdb` structure file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup>. With example config values this runs in <5min on M2 macbook air. The script runs through the following steps:
@@ -54,7 +54,7 @@ This script loads the iq reciprocal space voxel grid and associated axes generat
 
 Configuration file parameters:\
 An example configuration file is in `/config_templates/detectormaker_config.txt`
-- `iq_output_folder`=(string) output from `voxelgridmaker.py` (form `name_output_files/`).
+- `iq_output_folder`=(string) output from `voxelgridmaker.py` (form `./name_output_files`).
 - `gen_name`=(string) same `gen_name` used in `voxelgridmaker.py`.
 - `max_q`=(positive float) maximum q-value on detector must be ≤ max_q used to make iq file.
 - `num_pixels`=(positive integer) number of pixels along each detector axis.
