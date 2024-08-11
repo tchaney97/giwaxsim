@@ -38,6 +38,7 @@ An example configuration file is in `/config_templates/voxelgridmaker_highmem_co
 - `output_dir`=(string) optional path to output directory; if not defined, `os.get_cwd()` is used.
 - `num_cpus`=(positive integer) number of cpu cores to utilize for multiprocessing
 - `tukey_val`=(positive float) between 0 and 1 to describe (scipy) tukey window. default 0 does not window data
+- `scratch_folder`=(string) path to a scratch directory for storing temporary orientation frames deleted during cleanup. Do not include trailing `/`. Default os.getcwd()
 
 Tips:
 - `r_voxel_size` and `q_voxel_size` determine your q-uncertainty and q-resolution respectively. Choosing a small `r_voxel_size` and small `q_voxel_size` requires very large arrays that will utilize more memory and slow the simulation. Reasonable values for PC use are in example config files
@@ -70,6 +71,13 @@ An example configuration file is in `/config_templates/detectormaker_config.txt`
 - `phi_start`=(float) starting value in degrees for phi.
 - `phi_end`=(float) ending value in degrees for phi.
 - `phi_num`=(positive integer) number of linearly spaced phi steps.
+- `theta_start`=(float) starting value in degrees for theta.
+- `theta_end`=(float) ending value in degrees for theta.
+- `theta_num`=(positive integer) number of linearly spaced theta steps.
+- `mirror`=(boolean) a flag to mirror final detector image about vertical and horizontal axes. Omit flag for False (writing `mirror=False` is still interpreted as True)
+- `cleanup`=(boolean) a flag to automatically delete single orientation frames after averaging (can range 1-100s of gb). Omit flag for False (writing `cleanup=False` is still interpreted as True)
+- `num_cpus`=(positive integer) number of cpu cores to utilize for multiprocessing
+- `scratch_folder`=(string) path to a scratch directory for storing temporary orientation frames deleted during cleanup. Do not include trailing `/`. Default os.getcwd()
 
 Tips:
 - Rotation axes are defined as psi, phi, and theta for rotation about detector normal, vertical, and horizontal axes, respectively.
@@ -106,7 +114,7 @@ Script in progress. Current tools are contained in jupyter notebooks in the `tes
 ### estimateresources.py:
 Script in progress. Current tools are contained in jupyter notebooks in the `test_notebooks` folder.
 
-### voxelgridmaker_highmem.py: 
+### Legacy: voxelgridmaker_highmem.py: 
 *Note this is a legacy method that is much less computationally and memory efficient than the new implimentation in voxelgridmaker.py text*
 
 This script takes a `.xyz` or `.pdb` structure file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup> through the following steps:
