@@ -137,19 +137,19 @@ An example configuration file is in `/config_templates/voxelgridmaker_highmem_co
 - `bkg_edens`=(any) pad .xyz file with average "background" electron densitydefault to False, set to 1 (or anything) for True.
 
 ## To do:
-- Implement analytical FT from Ty’s code?
-  - time=high, complexity=high
-  - Opens the door to desktop computing
-  - Can properly implement f0, f1, and f2
-  - Easier implementation of dynamics from MD
-- Add capability to enable/disable “mirroring” of detector images for spin-coat vs oriented film simulation
-  - time=low, complexity=low
 - Add capability for polarization effects 
-  - Time=low, complexity=medium
+  - Time=low, complexity=low
 - Add memory requirement estimator tool
   - Time=medium, complexity=low
 - Convert plotting functions from notebook to script
   - Time=medium, complexity=low
 - Check for and remove duplicated atomic positions in slabmaker
   - Time=medium, complexity=medium
-
+- Optional GUI
+  - Time=high, complexity=medium
+- Convert to classes
+  - Time=high, complexity=low
+- Supress termination ripples in voxelgridmaker.py
+  - Time=medium, complexity=high
+- progress bars!
+  - Time=low, complexity=low
