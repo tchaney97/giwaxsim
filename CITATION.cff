@@ -1,0 +1,26 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: GIWAXSim
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Thomas P.
+    family-names: Chaney
+    email: Thomas.Chaney@colorado.edu
+    affiliation: University of Colorado Boulder
+    orcid: 'https://orcid.org/0000-0002-8123-7215'
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.13508430
+repository-code: 'https://github.com/tchaney97/giwaxsim'
+abstract: >-
+  X-ray scattering simulator based on 3D fourier transform
+  to accurately capture effects from paracrystallinity and
+  orientational disorder. Inputs are .xyz or .pdb files
+  (usually snapshots from molecular dynamics)
+license: MIT
+date-released: '2024-08-29'
