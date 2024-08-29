@@ -1,6 +1,8 @@
 # GIWAXSim
 This repository contains scripts for generating forward simulations of GIWAXS (Grazing Incidence Wide-Angle X-ray Scattering) data. The simulations are created using structure `.xyz` or `.pdb` files and produce 3D voxel grids of scattering intensity values, which can then be used to generate 2D detector images at various geometries.
 
+If you find this code useful for your research please consider citing it: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13508430.svg)](https://doi.org/10.5281/zenodo.13508430)
+
 ![gif of detector intersection of reciprocal space](sample_images/sidebyside5.gif)
 
 ## Requirements:
