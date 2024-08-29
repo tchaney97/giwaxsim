@@ -13,7 +13,7 @@ This repository contains scripts for generating forward simulations of GIWAXS (G
 - xraydb
 
 ## Usage:
-Forward simulations are created through two different scripts: `voxelgridmaker.py` and `detectormaker.py`. These scripts are intended to be run in the command line with a single argument pointing to the configuration file (ex: `python voxelgridmaker.py --config /path/to/config_file.txt`). Details of these scripts and their configuration file formats are described below. Note that whenever a directory is input as a string please do **not** include the trailing `/`:
+Forward simulations are created through two different scripts: `voxelgridmaker.py` and `detectormaker.py`. These scripts are intended to be run in the command line with a single argument pointing to the configuration file (ex: `python voxelgridmaker.py --config /path/to/config_file.txt`). Generally, voxelgridmaker should be ran first to generate a voxelgrid from some structural file and then detectormaker will be ran on a voxelgrid to generate a 2D detector image accounting for defined orientational disorder. Details of these scripts and their configuration file formats are described below. Note that whenever a directory is input as a string please do **not** include the trailing `/`:
 
 ### voxelgridmaker.py: 
 This script takes a `.xyz` or `.pdb` structure file and converts it into a 3D voxel grid of scattering intensity values with axes in units of Å<sup>-1</sup>. With example config values this runs in <5min on M2 macbook air. The script runs through the following steps:
