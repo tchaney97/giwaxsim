@@ -155,6 +155,3 @@ An example configuration file is in `/config_templates/voxelgridmaker_highmem_co
   - Time=medium, complexity=high
 - progress bars!
   - Time=low, complexity=low
-
-
-google-site-verification: google81bf67aceeeaf7e4.html
