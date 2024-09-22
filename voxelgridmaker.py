@@ -4,7 +4,7 @@ import os
 import argparse
 import time
 
-from tools.utilities import parse_config_file, most_common_element, save_config_to_txt
+from tools.utilities import parse_config_file, most_common_element, save_config_to_txt, str_to_bool
 from tools.voxelgrids import downselect_voxelgrid, add_f0_q_3d, generate_voxel_grid_low_mem
 
 def main(config):
@@ -21,7 +21,8 @@ def main(config):
     output_dir = config.get('output_dir', os.getcwd())
     num_cpus = int(config.get('num_cpus', os.cpu_count()))
     scratch_folder = config.get('scratch_folder', os.getcwd())
-    tukey_val = float(config.get('tukey_val', 0))
+    smooth = int(config.get('smooth', 0))
+    fill_bkg = str_to_bool(config.get('fill_bkg', 'False'))
 
     if input_folder:
         input_paths = glob.glob(f'{input_folder}/*{filetype}')
@@ -40,7 +41,8 @@ def main(config):
                                                     gen_name, 
                                                     scratch_folder=scratch_folder, 
                                                     num_cpus=num_cpus,
-                                                    tukey_val=tukey_val)
+                                                    fill_bkg=fill_bkg,
+                                                    smooth=smooth)
     
         # Optional downselect iq meshgrid based on max q desired
         iq_small, qx_small, qy_small, qz_small = downselect_voxelgrid(iq, qx, qy, qz, max_q)

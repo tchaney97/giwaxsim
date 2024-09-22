@@ -145,7 +145,7 @@ def main(config):
     ax1.set_ylim(bottom=0)
     cbar = fig.colorbar(cax, ax=ax1)
     plt.tight_layout()
-    plt.savefig(f'{save_path}/{gen_name}_det_sum_log.png', dpi=300)
+    plt.savefig(f'{det_sum_path}/{gen_name}_det_sum_log.png', dpi=300)
 
     fig, ax1 = subplots()
     cax = ax1.imshow(det_sum,

@@ -5,13 +5,38 @@ import re
 import os
 from tools.ptable_dict import ptable, aff_dict
 
-def str_to_bool(input_str):
-    if input_str.lower() == 'true':
+def str_to_bool(input_value, default=False):
+    """
+    Convert user input to a boolean value.
+    
+    Args:
+        input_value (str): The user input that needs to be converted to a boolean.
+        default (bool): The default value to return if the input is invalid.
+    
+    Returns:
+        bool: The converted boolean value.
+    
+    Raises:
+        ValueError: If the input is invalid and no default value is set.
+    """
+    # Define true and false equivalents
+    true_values = {'true', 't', 'yes', 'y', '1', 'on'}
+    false_values = {'false', 'f', 'no', 'n', '0', 'off'}
+
+    # Convert input to lowercase string for comparison
+    input_str = str(input_value).strip().lower()
+
+    # Check against true and false values
+    if input_str in true_values:
         return True
-    elif input_str.lower() == 'false':
+    elif input_str in false_values:
         return False
+    elif default is not None:
+        # Return the default if provided
+        return default
     else:
-        raise ValueError("Invalid input: Expected 'True' or 'False'")
+        # Raise an error for invalid inputs if no default
+        raise ValueError(f"Invalid input for boolean conversion: {input_value}")
 
 def parse_config_file(file_path):
     config = {}
