@@ -310,7 +310,7 @@ def rectangular_collapse_lengths(x_vals, hor_length, ver_length, phi):
     return np.asarray(lengths)
 
 def rotate_project_fft_coords(args):
-        coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, y_bound, x_bound, fill_bkg, smooth = args
+        coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth, fix_dc_offset = args
         #rotate coords about phi
         coords_rot = rotate_coords_z(coords, phi)
 
@@ -347,7 +347,6 @@ def rotate_project_fft_coords(args):
             amorphous_contribution = np.tile(num_missing_voxels*avg_voxel_f, (grid_size, 1))
             detector_grid = (detector_grid+amorphous_contribution)
             
-
             # Determine the bounds of data
             y_min = np.min(y_indices)
             z_min = np.min(z_indices)
@@ -360,28 +359,23 @@ def rotate_project_fft_coords(args):
             detector_grid[z_min:z_max + 1, :y_min+1] = avg_voxel_f*max_voxels  # Left area
             detector_grid[z_min:z_max + 1, y_max:] = avg_voxel_f*max_voxels  # Right area
 
+        # Create a 1D smoothing transition along each axis
+        if smooth:
+            avg_val = avg_voxel_f*max_voxels
+            sigma = smooth
+            mask_y = np.zeros(detector_grid.shape[1])
+            mask_z = np.zeros(detector_grid.shape[0])
+            mask_y[y_min+sigma:y_max-sigma] = 1
+            mask_z[z_min+sigma:z_max-sigma] = 1
 
-            # Create a 1D smoothing transition along each axis
-            if smooth:
-                avg_val = avg_voxel_f*max_voxels
-                sigma = smooth
-                mask_y = np.zeros(detector_grid.shape[1])
-                mask_z = np.zeros(detector_grid.shape[0])
-                mask_y[y_min+sigma:y_max-sigma] = 1
-                mask_z[z_min+sigma:z_max-sigma] = 1
+            # Apply 1D Gaussian smoothing along each axis
+            smoothed_mask_y = gaussian_filter1d(mask_y, sigma=sigma, mode='wrap')
+            smoothed_mask_z = gaussian_filter1d(mask_z, sigma=sigma, mode='wrap')
 
-
-                # Apply 1D Gaussian smoothing along each axis
-                smoothed_mask_y = gaussian_filter1d(mask_y, sigma=sigma, mode='wrap')
-                smoothed_mask_z = gaussian_filter1d(mask_z, sigma=sigma, mode='wrap')
-                # smoothed_mask_y = gaussian_filter1d(mask_y, sigma=sigma)
-                # smoothed_mask_z = gaussian_filter1d(mask_z, sigma=sigma)
-
-
-                # Create a 2D smoothing mask by multiplying the 1D masks
-                smoothing_mask = np.outer(smoothed_mask_z, smoothed_mask_y)
-                # Apply the smoothing mask to blend the ROI and the padded values
-                detector_grid = detector_grid * smoothing_mask + avg_val * (1 - smoothing_mask)
+            # Create a 2D smoothing mask by multiplying the 1D masks
+            smoothing_mask = np.outer(smoothed_mask_z, smoothed_mask_y)
+            # Apply the smoothing mask to blend the ROI and the padded values
+            detector_grid = detector_grid * smoothing_mask + avg_val * (1 - smoothing_mask)
 
         # Calculate axis q-values
         q_h = np.fft.fftfreq(grid_size, d=r_voxel_size) * 2 * np.pi
@@ -396,6 +390,28 @@ def rotate_project_fft_coords(args):
         # Magnitude squared of the Fourier transform for scattering intensity I(q)
         iq_2d = np.abs(ft_density_shifted)**2
 
+        phi_100x = int(phi*100)
+        filepath = f'{temp_folder}/tempfile_{phi_100x}'
+
+        # for some reason this is needed to prevent bright DC offset along q-axes when slab does not fill grid size
+        # This method should be used with care as it masks some data
+        if fix_dc_offset:
+            threshold = grid_size * r_voxel_size * 0.8
+            if z_bound < threshold:
+                qh0_idx = np.argmin(np.abs(q_h_shifted-0))
+                iq_2d[:,qh0_idx-6:qh0_idx+6] = iq_2d[:qh0_idx+7]/2+iq_2d[:, qh0_idx-7]/2
+            if (x_bound < threshold and y_bound < threshold):
+                qv0_idx = np.argmin(np.abs(q_v_shifted-0))
+                iq_2d[qv0_idx-6:qv0_idx+6, :] = iq_2d[qv0_idx+7, :]/2+iq_2d[qv0_idx-7, :]/2
+            elif x_bound < threshold:
+                qv0_idx = np.argmin(np.abs(q_v_shifted-0))
+                if (phi>75 and phi<105):
+                    iq_2d[qv0_idx-6:qv0_idx+6, :] = iq_2d[qv0_idx+7, :]/2+iq_2d[qv0_idx-7, :]/2
+            elif y_bound < threshold:
+                qv0_idx = np.argmin(np.abs(q_v_shifted-0))
+                if (phi<15 or phi>165):
+                    iq_2d[qv0_idx-6:qv0_idx+6, :] = iq_2d[qv0_idx+7, :]/2+iq_2d[qv0_idx-7, :]/2
+
         #some way to assign each pixel qx,qy,qz with trig
         #rotating the coordinates by phi is equivalent to detector rotation by -phi
         right_qy = np.max(q_h_shifted) * np.cos(np.deg2rad(-phi))
@@ -406,9 +422,6 @@ def rotate_project_fft_coords(args):
         det_h_qx = np.linspace(left_qx, right_qx, num=len(q_h_shifted))
         det_v_qz = q_v_shifted
 
-
-        phi_100x = int(phi*100)
-        filepath = f'{temp_folder}/tempfile_{phi_100x}'
         np.save(f'{filepath}_iq.npy', iq_2d)
         np.save(f'{filepath}_h_qx.npy', det_h_qx)
         np.save(f'{filepath}_h_qy.npy', det_h_qy)
@@ -496,54 +509,7 @@ def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
 
     return iq_3D
 
-def heal_dc_offset(master_iq_3D, x_bound, y_bound, z_bound, qx, qy, qz, q_voxel_size, r_voxel_size, grid_size):
-    qx0_idx = np.argmin(np.abs(qx-0))
-    qy0_idx = np.argmin(np.abs(qy-0))
-    qz0_idx = np.argmin(np.abs(qz-0))
-    size_q = 0.15
-    size = int(np.ceil(size_q/q_voxel_size))
-    width = int(2*size+1)
-
-    # Handling the x-axis case
-    if x_bound < grid_size * r_voxel_size * 0.8:
-        master_iq_3D[qy0_idx - size:qy0_idx + size + 1, :, qz0_idx - size:qz0_idx + size + 1] = 0
-        for y_row in range(width):
-            add_vals = master_iq_3D[qy0_idx - size + y_row, :, qz0_idx - size - 1] / 4 + master_iq_3D[qy0_idx - size + y_row, :, qz0_idx + size + 1] / 4
-            add_vals = np.repeat(add_vals[np.newaxis, :], width, axis=0)
-            master_iq_3D[qy0_idx - size + y_row, :, qz0_idx - size:qz0_idx + size + 1] += add_vals
-        for z_row in range(width):
-            add_vals = master_iq_3D[qy0_idx - size - 1, :, qz0_idx - size + z_row] / 4 + master_iq_3D[qy0_idx + size + 1, :, qz0_idx - size + z_row] / 4
-            add_vals = np.repeat(add_vals[np.newaxis, :], width, axis=0)
-            master_iq_3D[qy0_idx - size:qy0_idx + size + 1, :, qz0_idx - size + z_row] += add_vals
-
-    # Handling the y-axis case
-    if y_bound < grid_size * r_voxel_size * 0.8:
-        master_iq_3D[:, qx0_idx - size:qx0_idx + size + 1, qz0_idx - size:qz0_idx + size + 1] = 0
-        for x_row in range(width):
-            add_vals = master_iq_3D[:, qx0_idx - size + x_row, qz0_idx - size - 1] / 4 + master_iq_3D[:, qx0_idx - size + x_row, qz0_idx + size + 1] / 4
-            add_vals = np.repeat(add_vals[:, np.newaxis], width, axis=1)
-            master_iq_3D[:, qx0_idx - size + x_row, qz0_idx - size:qz0_idx + size + 1] += add_vals
-        for z_row in range(width):
-            add_vals = master_iq_3D[:, qx0_idx - size - 1, qz0_idx - size + z_row] / 4 + master_iq_3D[:, qx0_idx + size + 1, qz0_idx - size + z_row] / 4
-            add_vals = np.repeat(add_vals[:, np.newaxis], width, axis=1)
-            master_iq_3D[:, qx0_idx - size:qx0_idx + size + 1, qz0_idx - size + z_row] += add_vals
-
-    # Handling the z-axis case
-    if z_bound < grid_size * r_voxel_size * 0.8:
-        master_iq_3D[qy0_idx - size:qy0_idx + size + 1, qx0_idx - size:qx0_idx + size + 1, :] = 0
-        for y_row in range(width):
-            add_vals = master_iq_3D[qy0_idx - size + y_row, qx0_idx - size - 1, :] / 4 + master_iq_3D[qy0_idx - size + y_row, qx0_idx + size + 1, :] / 4
-            add_vals = np.repeat(add_vals[:, :, np.newaxis], width, axis=2)
-            master_iq_3D[qy0_idx - size + y_row, qx0_idx - size:qx0_idx + size + 1, :] += add_vals
-        for x_row in range(width):
-            add_vals = master_iq_3D[qy0_idx - size - 1, qx0_idx - size + x_row, :] / 4 + master_iq_3D[qy0_idx + size + 1, qx0_idx - size + x_row, :] / 4
-            add_vals = np.repeat(add_vals[:, :, np.newaxis], width, axis=2)
-            master_iq_3D[qy0_idx - size:qy0_idx + size + 1, qx0_idx - size + x_row, :] += add_vals
-
-    return master_iq_3D
-
-
-def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_folder=None, num_cpus=None, fill_bkg=False, smooth=0):
+def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_folder=None, num_cpus=None, fill_bkg=False, smooth=0, fix_dc_offset=False):
     """
     Low memory method for generating a 3D voxelized scattering intensity reciprocal space grid from .xyz file.
     A average electron density is optionally applied outside of the smallest
@@ -636,7 +602,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
 
 
         #parallel processing to generate frames used to construct iq_3D
-        args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, y_bound, x_bound, fill_bkg, smooth) for phi in phis]
+        args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound,  y_bound, z_bound, fill_bkg, smooth, fix_dc_offset) for phi in phis]
         with Pool(processes=num_cpus) as pool:
             filepaths = pool.map(rotate_project_fft_coords, args)
         master_iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz)
@@ -702,10 +668,8 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         raise Exception('Invalid aff_num_qs value. Must be non-negative integer')
 
 
-
-    #heal DC offset signal (I think)
-    #temporary, need to understand this better
-    master_iq_3D = heal_dc_offset(master_iq_3D, x_bound, y_bound, z_bound, qx, qy, qz, q_voxel_size, r_voxel_size, grid_size)
+    #heal DC offset signal (better implementation in rotate_project_fft_coords())
+    # master_iq_3D = heal_dc_offset(master_iq_3D, x_bound, y_bound, z_bound, qx, qy, qz, q_voxel_size, r_voxel_size, grid_size)
 
     if output_dir:
         save_path = f'{output_dir}/{gen_name}_output_files/'
@@ -853,3 +817,50 @@ def add_f0_q_3d(iq, qx_axis, qy_axis, qz_axis, element):
     iq_new *=fq_norm
 
     return iq_new
+
+#keeping this here in case it is useful in the future
+# def heal_dc_offset(master_iq_3D, x_bound, y_bound, z_bound, qx, qy, qz, q_voxel_size, r_voxel_size, grid_size):
+#     qx0_idx = np.argmin(np.abs(qx-0))
+#     qy0_idx = np.argmin(np.abs(qy-0))
+#     qz0_idx = np.argmin(np.abs(qz-0))
+#     size_q = 0.15
+#     size = int(np.ceil(size_q/q_voxel_size))
+#     width = int(2*size+1)
+
+#     # Handling the x-axis case
+#     if x_bound < grid_size * r_voxel_size * 0.8:
+#         master_iq_3D[qy0_idx - size:qy0_idx + size + 1, :, qz0_idx - size:qz0_idx + size + 1] = 0
+#         for y_row in range(width):
+#             add_vals = master_iq_3D[qy0_idx - size + y_row, :, qz0_idx - size - 1] / 4 + master_iq_3D[qy0_idx - size + y_row, :, qz0_idx + size + 1] / 4
+#             add_vals = np.repeat(add_vals[np.newaxis, :], width, axis=0)
+#             master_iq_3D[qy0_idx - size + y_row, :, qz0_idx - size:qz0_idx + size + 1] += add_vals
+#         for z_row in range(width):
+#             add_vals = master_iq_3D[qy0_idx - size - 1, :, qz0_idx - size + z_row] / 4 + master_iq_3D[qy0_idx + size + 1, :, qz0_idx - size + z_row] / 4
+#             add_vals = np.repeat(add_vals[np.newaxis, :], width, axis=0)
+#             master_iq_3D[qy0_idx - size:qy0_idx + size + 1, :, qz0_idx - size + z_row] += add_vals
+
+#     # Handling the y-axis case
+#     if y_bound < grid_size * r_voxel_size * 0.8:
+#         master_iq_3D[:, qx0_idx - size:qx0_idx + size + 1, qz0_idx - size:qz0_idx + size + 1] = 0
+#         for x_row in range(width):
+#             add_vals = master_iq_3D[:, qx0_idx - size + x_row, qz0_idx - size - 1] / 4 + master_iq_3D[:, qx0_idx - size + x_row, qz0_idx + size + 1] / 4
+#             add_vals = np.repeat(add_vals[:, np.newaxis], width, axis=1)
+#             master_iq_3D[:, qx0_idx - size + x_row, qz0_idx - size:qz0_idx + size + 1] += add_vals
+#         for z_row in range(width):
+#             add_vals = master_iq_3D[:, qx0_idx - size - 1, qz0_idx - size + z_row] / 4 + master_iq_3D[:, qx0_idx + size + 1, qz0_idx - size + z_row] / 4
+#             add_vals = np.repeat(add_vals[:, np.newaxis], width, axis=1)
+#             master_iq_3D[:, qx0_idx - size:qx0_idx + size + 1, qz0_idx - size + z_row] += add_vals
+
+#     # Handling the z-axis case
+#     if z_bound < grid_size * r_voxel_size * 0.8:
+#         master_iq_3D[qy0_idx - size:qy0_idx + size + 1, qx0_idx - size:qx0_idx + size + 1, :] = 0
+#         for y_row in range(width):
+#             add_vals = master_iq_3D[qy0_idx - size + y_row, qx0_idx - size - 1, :] / 4 + master_iq_3D[qy0_idx - size + y_row, qx0_idx + size + 1, :] / 4
+#             add_vals = np.repeat(add_vals[:, :, np.newaxis], width, axis=2)
+#             master_iq_3D[qy0_idx - size + y_row, qx0_idx - size:qx0_idx + size + 1, :] += add_vals
+#         for x_row in range(width):
+#             add_vals = master_iq_3D[qy0_idx - size - 1, qx0_idx - size + x_row, :] / 4 + master_iq_3D[qy0_idx + size + 1, qx0_idx - size + x_row, :] / 4
+#             add_vals = np.repeat(add_vals[:, :, np.newaxis], width, axis=2)
+#             master_iq_3D[qy0_idx - size:qy0_idx + size + 1, qx0_idx - size + x_row, :] += add_vals
+
+#     return master_iq_3D
