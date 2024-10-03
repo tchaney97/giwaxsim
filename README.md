@@ -39,7 +39,9 @@ An example configuration file is in `/config_templates/voxelgridmaker_highmem_co
 - `max_q`=(positive float) determines the q-value to which the iq voxel grid is cropped.
 - `output_dir`=(string) optional path to output directory; if not defined, `os.get_cwd()` is used.
 - `num_cpus`=(positive integer) number of cpu cores to utilize for multiprocessing
-- `tukey_val`=(positive float) between 0 and 1 to describe (scipy) tukey window. default 0 does not window data
+- `fill_bkg`=(boolean) flag to fill the padded real-space (needed to reach desired q_voxel_size) with average electron density
+- `smooth`=(positve float) sigma value used to create smooth transition from slab electron density to padded electron density. 0 for no smoothing
+- `fix_dc_offset`=(boolean) flag to check for and fix any bright streak along q-axes that result from "dc offset"
 - `scratch_folder`=(string) path to a scratch directory for storing temporary orientation frames deleted during cleanup. Do not include trailing `/`. Default os.getcwd()
 
 Tips:
