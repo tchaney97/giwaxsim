@@ -285,11 +285,12 @@ def generate_detector_ints(args):
     output:
     - filename: string
     """
-    iq,qx,qy,qz,det_h,det_v,det_x,det_y,det_z,psi,phi,theta,save_path = args
+    iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, det_save_path = args
     det_x2, det_y2, det_z2 = rotate_psi_phi_theta(det_x, det_y, det_z, psi, phi, theta)
     det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2)
+    det_int *= psi_weight*phi_weight*theta_weight
     # det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2, det_h, det_v)
-    filename = f'{save_path}/det_ints_psi{psi*100:.0f}_phi{phi*100:.0f}_theta{theta*100:.0f}.npy'
+    filename = f'{det_save_path}/det_ints_psi{psi*100:.0f}_phi{phi*100:.0f}_theta{theta*100:.0f}.npy'
     np.save(filename, det_int)
     return filename
 

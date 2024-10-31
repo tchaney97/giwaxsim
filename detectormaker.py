@@ -26,12 +26,15 @@ def main(config):
     psi_start = float(config.get('psi_start'))
     psi_end = float(config.get('psi_end'))
     psi_num = int(config.get('psi_num'))
+    psi_weights_path = config.get('psi_weights_path', None)
     phi_start = float(config.get('phi_start'))
     phi_end = float(config.get('phi_end'))
     phi_num = int(config.get('phi_num'))
+    phi_weights_path = config.get('phi_weights_path', None)
     theta_start = float(config.get('theta_start'))
     theta_end = float(config.get('theta_end'))
     theta_num = int(config.get('theta_num'))
+    theta_weights_path = config.get('theta_weights_path', None)
     mirror = str_to_bool(config.get('mirror', False))
     cleanup = str_to_bool(config.get('cleanup', False))
     num_cpus = int(config.get('num_cpus', os.cpu_count()))
@@ -104,7 +107,28 @@ def main(config):
     phis = np.linspace(phi_start, phi_end, num=int(phi_num)) # rotation in degrees of detector about detector vertical axis
     thetas = np.linspace(theta_start, theta_end, num=int(theta_num)) # rotation in degrees of detector about detector horizontal axis
 
-    args_list = [(iq, qx, qy, qz, det_h, det_v, det_x, det_y, det_z, psi, phi, theta, det_save_path) for psi in psis for phi in phis for theta in thetas]
+    # Load weights or use default values
+    psi_weights = np.load(psi_weights_path) if psi_weights_path else np.ones_like(psis)/psi_num
+    phi_weights = np.load(phi_weights_path) if phi_weights_path else np.ones_like(phis)/phi_num
+    theta_weights = np.load(theta_weights_path) if theta_weights_path else np.ones_like(thetas)/theta_num
+
+    # Ensure weights match angle arrays
+    assert len(psis) == len(psi_weights), 'psi weights length must equal psi_num'
+    assert len(phis) == len(phi_weights), 'phi weights length must equal phi_num'
+    assert len(thetas) == len(theta_weights), 'theta weights length must equal theta_num'
+
+    assert np.abs(1-np.sum(psi_weights))<0.01, 'psi weights must sum to 1'
+    assert np.abs(1-np.sum(phi_weights))<0.01, 'phi weights must sum to 1'
+    assert np.abs(1-np.sum(theta_weights))<0.01, 'theta weights must sum to 1'
+
+    # Create args list with angle-weight pairs
+    args_list = [
+        (iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, det_save_path)
+        for psi, psi_weight in zip(psis, psi_weights)
+        for phi, phi_weight in zip(phis, phi_weights)
+        for theta, theta_weight in zip(thetas, theta_weights)
+    ]
+    
     with Pool(processes=num_cpus) as pool:
         filenames = pool.map(generate_detector_ints, args_list)
 
@@ -163,6 +187,7 @@ def main(config):
     save_config_to_txt(config, f'{det_sum_path}/{gen_name}_config.txt')
 
 if __name__ == "__main__":
+
     start = time.time()
     parser = argparse.ArgumentParser(description="Process a configuration file.")
     parser.add_argument('--config', type=str, required=True, help='Path to the configuration file')
