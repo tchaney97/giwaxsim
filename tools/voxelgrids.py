@@ -276,14 +276,13 @@ def rectangular_collapse_lengths(x_vals, hor_length, ver_length, phi):
         
     
     #calculate this once
-    if hor_length<ver_length:
-        stop1 = hor_length*np.cos(phi_rad)
-        stop2 = ver_length*np.cos(theta_rad)
-        mid_length = hor_length/np.sin(phi_rad)
-    else:
-        stop1 = ver_length*np.cos(theta_rad)
-        stop2 = hor_length*np.cos(phi_rad)
+    stop1 = ver_length*np.cos(theta_rad)
+    stop2 = hor_length*np.cos(phi_rad)
+    if stop1<stop2:
         mid_length = ver_length/np.sin(theta_rad)
+    else:
+        stop1, stop2 = stop2, stop1
+        mid_length = hor_length/np.sin(phi_rad)
 
     for x_val in x_vals:
         if x_val==0:
@@ -339,19 +338,18 @@ def rotate_project_fft_coords(args):
         #note this method assumes the simulated slab is a rectangular prism
         #this mehtod is not perfect as it does not account for "thickness variations"--
         #--of the slab when the detector collapses the slab at non-orthogonal angles
+        max_voxels = np.sqrt(x_bound**2 + y_bound**2)//r_voxel_size
+        # Determine the bounds of data
+        y_min = np.min(y_indices)
+        z_min = np.min(z_indices)
+        y_max = np.max(y_indices)
+        z_max = np.max(z_indices)
         if fill_bkg:
-            max_voxels = np.sqrt(x_bound**2 + y_bound**2)//r_voxel_size
             x_vals = np.arange(grid_size)*r_voxel_size
             lengths = rectangular_collapse_lengths(x_vals, y_bound, x_bound, phi)
             num_missing_voxels = (max_voxels - (lengths//r_voxel_size)).astype(int)
             amorphous_contribution = np.tile(num_missing_voxels*avg_voxel_f, (grid_size, 1))
             detector_grid = (detector_grid+amorphous_contribution)
-            
-            # Determine the bounds of data
-            y_min = np.min(y_indices)
-            z_min = np.min(z_indices)
-            y_max = np.max(y_indices)
-            z_max = np.max(z_indices)
 
             # Fill the outside areas using the averaged edge values
             detector_grid[:z_min, :] = avg_voxel_f*max_voxels  # Top area
@@ -393,25 +391,6 @@ def rotate_project_fft_coords(args):
         phi_100x = int(phi*100)
         filepath = f'{temp_folder}/tempfile_{phi_100x}'
 
-        # for some reason this is needed to prevent bright DC offset along q-axes when slab does not fill grid size
-        # This method should be used with care as it masks some data
-        if fix_dc_offset:
-            threshold = grid_size * r_voxel_size * 0.8
-            if z_bound < threshold:
-                qh0_idx = np.argmin(np.abs(q_h_shifted-0))
-                iq_2d[:,qh0_idx-6:qh0_idx+6] = iq_2d[:qh0_idx+7]/2+iq_2d[:, qh0_idx-7]/2
-            if (x_bound < threshold and y_bound < threshold):
-                qv0_idx = np.argmin(np.abs(q_v_shifted-0))
-                iq_2d[qv0_idx-6:qv0_idx+6, :] = iq_2d[qv0_idx+7, :]/2+iq_2d[qv0_idx-7, :]/2
-            elif x_bound < threshold:
-                qv0_idx = np.argmin(np.abs(q_v_shifted-0))
-                if (phi>75 and phi<105):
-                    iq_2d[qv0_idx-6:qv0_idx+6, :] = iq_2d[qv0_idx+7, :]/2+iq_2d[qv0_idx-7, :]/2
-            elif y_bound < threshold:
-                qv0_idx = np.argmin(np.abs(q_v_shifted-0))
-                if (phi<15 or phi>165):
-                    iq_2d[qv0_idx-6:qv0_idx+6, :] = iq_2d[qv0_idx+7, :]/2+iq_2d[qv0_idx-7, :]/2
-
         #some way to assign each pixel qx,qy,qz with trig
         #rotating the coordinates by phi is equivalent to detector rotation by -phi
         right_qy = np.max(q_h_shifted) * np.cos(np.deg2rad(-phi))
@@ -422,6 +401,8 @@ def rotate_project_fft_coords(args):
         det_h_qx = np.linspace(left_qx, right_qx, num=len(q_h_shifted))
         det_v_qz = q_v_shifted
 
+        # np.save(f'{filepath}_amorphgrid.npy', amorphous_contribution)
+        np.save(f'{filepath}_detgrid.npy', detector_grid)
         np.save(f'{filepath}_iq.npy', iq_2d)
         np.save(f'{filepath}_h_qx.npy', det_h_qx)
         np.save(f'{filepath}_h_qy.npy', det_h_qy)
