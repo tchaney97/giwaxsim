@@ -10,7 +10,7 @@ import os
 from scipy.signal import tukey
 from scipy.ndimage import gaussian_filter1d
 
-from tools.utilities import load_xyz, load_pdb, fft_gaussian, rotate_coords_z, get_element_f0_dict, get_element_f1_f2_dict
+from tools.utilities import load_xyz, load_pdb, fft_gaussian, rotate_coords_z, get_element_f0_dict, get_element_f1_f2_dict, create_shared_array
 from tools.ptable_dict import ptable, aff_dict
 
 def downselect_voxelgrid(grid, x_axis, y_axis, z_axis, max_val):
@@ -309,7 +309,12 @@ def rectangular_collapse_lengths(x_vals, hor_length, ver_length, phi):
     return np.asarray(lengths)
 
 def rotate_project_fft_coords(args):
-        coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth, fix_dc_offset = args
+        # coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth = args
+
+        ###
+        coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name = args
+        ###
+
         #rotate coords about phi
         coords_rot = rotate_coords_z(coords, phi)
 
@@ -402,19 +407,18 @@ def rotate_project_fft_coords(args):
         det_v_qz = q_v_shifted
 
         # np.save(f'{filepath}_amorphgrid.npy', amorphous_contribution)
-        np.save(f'{filepath}_detgrid.npy', detector_grid)
-        np.save(f'{filepath}_iq.npy', iq_2d)
-        np.save(f'{filepath}_h_qx.npy', det_h_qx)
-        np.save(f'{filepath}_h_qy.npy', det_h_qy)
-        np.save(f'{filepath}_v_qz.npy', det_v_qz)
+        # np.save(f'{filepath}_detgrid.npy', detector_grid)
+        # np.save(f'{filepath}_iq.npy', iq_2d)
+        # np.save(f'{filepath}_h_qx.npy', det_h_qx)
+        # np.save(f'{filepath}_h_qy.npy', det_h_qy)
+        # np.save(f'{filepath}_v_qz.npy', det_v_qz)
 
-        return filepath
 
-def create_shared_array(shape, name):
-    # Create a shared memory array
-    d_size = np.prod(shape) * np.dtype(np.float64).itemsize
-    shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
-    return shm
+        ###
+        process_file2(iq_2d, det_h_qx, det_h_qy, det_v_qz, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name)
+        ###
+
+        # return filepath
 
 def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name):
     # Access the shared memory arrays using their names
@@ -461,7 +465,50 @@ def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_co
     # Accumulate intensities in the corresponding pixels
     np.add.at(voxel_grid, (qy_indices, qx_indices, qz_indices), iq_vals)
     np.add.at(voxel_grid_count, (qy_indices, qx_indices, qz_indices), counter_vals)
-    
+
+def process_file2(iq_2d, det_h_qx, det_h_qy, det_v_qz, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name):
+    # Access the shared memory arrays using their names
+    voxel_grid_shm = shared_memory.SharedMemory(name=voxel_grid_shm_name)
+    voxel_grid_count_shm = shared_memory.SharedMemory(name=voxel_grid_count_shm_name)
+
+    q_num = len(qx)
+    # Create numpy arrays from the shared memory buffers for voxel grid and voxel count
+    voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
+    voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
+
+    # mask out values that do not fall within bounds
+    det_h_mask = (det_h_qx <= np.max(qx)) & (det_h_qx >= np.min(qx)) & (det_h_qy <= np.max(qy)) & (det_h_qy >= np.min(qy))
+    det_v_mask = (det_v_qz <= np.max(qz)) & (det_v_qz >= np.min(qz))
+
+    # slice 1D axis value arrays
+    det_h_qx = det_h_qx[det_h_mask]
+    det_h_qy = det_h_qy[det_h_mask]
+    det_v_qz = det_v_qz[det_v_mask]
+
+    # slice 2D array based on horizontal and vertical detector masks
+    iq_2d = iq_2d[det_v_mask, :][:, det_h_mask]
+
+    qx_mesh, qz_mesh = np.meshgrid(det_h_qx, det_v_qz)
+    qy_mesh, qz_mesh = np.meshgrid(det_h_qy, det_v_qz)
+
+    qx_vals = np.ravel(qx_mesh)
+    qy_vals = np.ravel(qy_mesh)
+    qz_vals = np.ravel(qz_mesh)
+    iq_vals = np.ravel(iq_2d)
+    counter_vals = np.ones_like(iq_vals)
+
+    # Convert y, z coordinates to pixel indices
+    actual_q_voxel = np.diff(qz)[0] #voxels are cubes
+    qx_indices = ((qx_vals-np.min(qx)) // actual_q_voxel).astype(int)
+    qy_indices = ((qy_vals-np.min(qy)) // actual_q_voxel).astype(int)
+    qz_indices = ((qz_vals-np.min(qz)) // actual_q_voxel).astype(int)
+
+    # Accumulate intensities in the corresponding pixels
+    np.add.at(voxel_grid, (qy_indices, qx_indices, qz_indices), iq_vals)
+    np.add.at(voxel_grid_count, (qy_indices, qx_indices, qz_indices), counter_vals)
+
+    voxel_grid_shm.close()
+    voxel_grid_count_shm.close()
 
 def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
     # Create shared arrays for voxel grid and voxel count with the specified dimensions
@@ -490,7 +537,7 @@ def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
 
     return iq_3D
 
-def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_folder=None, num_cpus=None, fill_bkg=False, smooth=0, fix_dc_offset=False):
+def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, aff_num_qs, energy, gen_name, output_dir=None, scratch_folder=None, num_cpus=None, fill_bkg=False, smooth=0):
     """
     Low memory method for generating a 3D voxelized scattering intensity reciprocal space grid from .xyz file.
     A average electron density is optionally applied outside of the smallest
@@ -557,6 +604,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
     phi_num = np.ceil(2*np.pi/delta_phi_rad).astype(int)
     last_phi = 180-(180/phi_num)
     phis = np.linspace(0,last_phi, num=phi_num)
+    print(phi_num)
 
     #save in some scratch folder to combine into voxelgrid later
     if scratch_folder:
@@ -581,23 +629,38 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         volume = x_bound * y_bound * z_bound
         avg_voxel_f = (sum_f_values/volume) * r_voxel_size**3
 
+        # Create shared arrays for voxel grid and voxel count with the specified dimensions
+        voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
+        voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
+        args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, 
+                 x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for phi in phis]
+ 
+         # Multiprocessing (parallel) slower
+        ###
+        # with Pool(processes=num_cpus) as pool:
+        #     pool.map(rotate_project_fft_coords, args)
+        ###
 
-        #parallel processing to generate frames used to construct iq_3D
-        args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound,  y_bound, z_bound, fill_bkg, smooth, fix_dc_offset) for phi in phis]
-        with Pool(processes=num_cpus) as pool:
-            filepaths = pool.map(rotate_project_fft_coords, args)
-        master_iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz)
-        # Cleanup temporary files
-        for filepath in filepaths:
-            try:
-                os.remove(f'{filepath}_iq.npy')
-                os.remove(f'{filepath}_h_qx.npy')
-                os.remove(f'{filepath}_h_qy.npy')
-                os.remove(f'{filepath}_v_qz.npy')
-            except OSError as e:
-                print(f"Error deleting file {filepath}: {e}")
+        #multithreading (concurrent) this is faster in most cases
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(rotate_project_fft_coords, arg) for arg in args]
+            for future in as_completed(futures):
+                future.result()
 
-    #not very memory or cpu efficient implimentation. Fix later
+        # Create numpy arrays from the shared memory buffers
+        voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
+        voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
+
+        # Final IQ calculation
+        master_iq_3D = np.divide(voxel_grid, voxel_grid_count, out=np.zeros_like(voxel_grid), where=voxel_grid_count != 0)
+
+        voxel_grid_shm.close()
+        voxel_grid_shm.unlink()
+        voxel_grid_count_shm.close()
+        voxel_grid_count_shm.unlink()
+
+
+
     elif aff_num_qs > 1:
         qx_mesh, qy_mesh, qz_mesh = np.meshgrid(qx, qy, qz)
         qr_mesh = np.sqrt(qx_mesh**2 + qy_mesh**2 + qz_mesh**2)
@@ -624,33 +687,41 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
             volume = x_bound * y_bound * z_bound
             avg_voxel_f = (sum_f_values/volume) * r_voxel_size**3
 
-            #parallel processing of frames rotating around phi
-            args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, y_bound, x_bound, fill_bkg, smooth) for phi in phis]
-            with Pool(processes=num_cpus) as pool:
-                filepaths = pool.map(rotate_project_fft_coords, args)
-            #generate iq voxelgrid, mask out q's based on valid f0 range, add to master
-            iq_3D = frames_to_iq_parallel(filepaths, q_num, qx, qy, qz)
+            # Create shared arrays for voxel grid and voxel count with the specified dimensions
+            voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
+            voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
+            args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, 
+                    x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for phi in phis]
+    
+            # Multiprocessing (parallel) slower
+            ###
+            # with Pool(processes=num_cpus) as pool:
+            #     pool.map(rotate_project_fft_coords, args)
+            ###
+
+            #multithreading (concurrent) this is faster in most cases
+            with ThreadPoolExecutor() as executor:
+                futures = [executor.submit(rotate_project_fft_coords, arg) for arg in args]
+                for future in as_completed(futures):
+                    future.result()
+
+            # Create numpy arrays from the shared memory buffers
+            voxel_grid = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_shm.buf)
+            voxel_grid_count = np.ndarray((q_num, q_num, q_num), dtype=np.float64, buffer=voxel_grid_count_shm.buf)
+
+            # Final IQ calculation
+            master_iq_3D = np.divide(voxel_grid, voxel_grid_count, out=np.zeros_like(voxel_grid), where=voxel_grid_count != 0)
+
+            voxel_grid_shm.close()
+            voxel_grid_shm.unlink()
+            voxel_grid_count_shm.close()
+            voxel_grid_count_shm.unlink()
+
             iq_mask = (qr_mesh <= upper_q) & (qr_mesh > lower_q)
-            master_iq_3D += np.where(iq_mask, iq_3D, 0)
-
-            #cleanup memory
-            del iq_3D, iq_mask
-
-            # Cleanup temporary files
-            for filepath in filepaths:
-                try:
-                    os.remove(f'{filepath}_iq.npy')
-                    os.remove(f'{filepath}_h_qx.npy')
-                    os.remove(f'{filepath}_h_qy.npy')
-                    os.remove(f'{filepath}_v_qz.npy')
-                except OSError as e:
-                    print(f"Error deleting file {filepath}: {e}")
+            master_iq_3D += np.where(iq_mask, master_iq_3D, 0)
     else:
         raise Exception('Invalid aff_num_qs value. Must be non-negative integer')
 
-
-    #heal DC offset signal (better implementation in rotate_project_fft_coords())
-    # master_iq_3D = heal_dc_offset(master_iq_3D, x_bound, y_bound, z_bound, qx, qy, qz, q_voxel_size, r_voxel_size, grid_size)
 
     if output_dir:
         save_path = f'{output_dir}/{gen_name}_output_files/'

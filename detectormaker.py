@@ -2,12 +2,13 @@ import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import subplots
-from multiprocessing import Pool
+from multiprocessing import Pool, shared_memory
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import argparse
 import time
 
-from tools.utilities import  parse_config_file, str_to_bool, save_config_to_txt
+from tools.utilities import  parse_config_file, str_to_bool, save_config_to_txt, create_shared_array
 from tools.detector import make_detector, rotate_about_normal, rotate_about_horizontal, rotate_about_vertical
 from tools.detector import mirror_vertical_horizontal, generate_detector_ints
 
@@ -63,14 +64,6 @@ def main(config):
 
     if not scratch_folder:
         scratch_folder = save_path
-    if i > 0:
-        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs{i}'
-    else:
-        det_save_path = f'{scratch_folder}/{gen_name}_det_imgs'
-
-    # shouldnt already exist but just in case
-    if not os.path.exists(det_save_path):
-        os.mkdir(det_save_path)
 
     det_pixels = (num_pixels, num_pixels) # horizontal, vertical
     det_qs = (max_q, max_q) # horizontal, vertical
@@ -122,69 +115,67 @@ def main(config):
     assert np.abs(1-np.sum(theta_weights))<0.01, 'theta weights must sum to 1'
 
     # Create args list with angle-weight pairs
+    det_ints_shm = create_shared_array(det_pixels, 'det_ints_shared')
     args_list = [
-        (iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, det_save_path)
+        (iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, 'det_ints_shared')
         for psi, psi_weight in zip(psis, psi_weights)
         for phi, phi_weight in zip(phis, phi_weights)
         for theta, theta_weight in zip(thetas, theta_weights)
     ]
+
+
+    try:
+        # Threading is faster but keeping the parallel processing code here in case
+        # with Pool(processes=num_cpus) as pool:
+        # pool.map(generate_detector_ints, args_list)
+        # det_sum = np.ndarray(det_pixels, dtype=np.float64, buffer=det_ints_shm.buf)
+        
+        # Use ThreadPoolExecutor to process each file in parallel
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(generate_detector_ints, arg) for arg in args_list]
+            for future in as_completed(futures):
+                future.result()
+
+        det_sum = np.ndarray(det_pixels, dtype=np.float64, buffer=det_ints_shm.buf)
+        # Fold detector sum image to capture full orientational space
+        if mirror:
+            det_sum = mirror_vertical_horizontal(det_sum)
+        det_sum[det_sum != det_sum] = 1e-6
+        det_sum[det_sum <= 0] = 1e-6
+        np.save(f'{det_sum_path}/{gen_name}_det_sum.npy', det_sum)
+
+        fig, ax1 = subplots()
+        cax = ax1.imshow(det_sum,
+                norm=matplotlib.colors.LogNorm(vmin=np.percentile(det_sum, 10), vmax=np.percentile(det_sum, 99.9)),
+                extent=(np.min(det_h), np.max(det_h), np.min(det_v), np.max(det_v)),
+                cmap='turbo',
+                origin='lower')
+        ax1.set_xlabel('q horizontal (1/Å)')
+        ax1.set_ylabel('q vertical (1/Å)')
+        ax1.set_ylim(bottom=0)
+        cbar = fig.colorbar(cax, ax=ax1)
+        plt.tight_layout()
+        plt.savefig(f'{det_sum_path}/{gen_name}_det_sum_log.png', dpi=300)
+
+        fig, ax1 = subplots()
+        cax = ax1.imshow(det_sum,
+                norm=matplotlib.colors.Normalize(vmin=np.percentile(det_sum, 10), vmax=np.percentile(det_sum, 99.9)),
+                extent=(np.min(det_h), np.max(det_h), np.min(det_v), np.max(det_v)),
+                cmap='turbo',
+                origin='lower')
+        ax1.set_xlabel('q horizontal (1/Å)')
+        ax1.set_ylabel('q vertical (1/Å)')
+        ax1.set_ylim(bottom=0)
+        cbar = fig.colorbar(cax, ax=ax1)
+        plt.tight_layout()
+        plt.savefig(f'{det_sum_path}/{gen_name}_det_sum_lin.png', dpi=300)
+
+        save_config_to_txt(config, f'{det_sum_path}/{gen_name}_config.txt')
     
-    with Pool(processes=num_cpus) as pool:
-        filenames = pool.map(generate_detector_ints, args_list)
-
-    det_files = filenames
-    for i, det_file in enumerate(det_files):
-        det_img = np.load(det_file)
-        if i == 0:
-            det_sum = det_img
-        else:
-            det_sum += det_img
-
-    # Fold detector sum image to capture full orientational space
-    if mirror:
-        det_sum = mirror_vertical_horizontal(det_sum)
-    det_sum[det_sum != det_sum] = 1e-6
-    det_sum[det_sum <= 0] = 1e-6
-    np.save(f'{det_sum_path}/{gen_name}_det_sum.npy', det_sum)
-
-    if cleanup:
-        for filepath in filenames:
-            try:
-                os.remove(filepath)
-            except OSError as e:
-                print(f"Error deleting file {filepath}: {e}")
-        try:
-            os.rmdir(det_save_path)
-        except OSError as e:
-            print(f"Error deleting directory {det_save_path}: {e}")
-
-    fig, ax1 = subplots()
-    cax = ax1.imshow(det_sum,
-               norm=matplotlib.colors.LogNorm(vmin=np.percentile(det_sum, 10), vmax=np.percentile(det_sum, 99.9)),
-               extent=(np.min(det_h), np.max(det_h), np.min(det_v), np.max(det_v)),
-               cmap='turbo',
-               origin='lower')
-    ax1.set_xlabel('q horizontal (1/Å)')
-    ax1.set_ylabel('q vertical (1/Å)')
-    ax1.set_ylim(bottom=0)
-    cbar = fig.colorbar(cax, ax=ax1)
-    plt.tight_layout()
-    plt.savefig(f'{det_sum_path}/{gen_name}_det_sum_log.png', dpi=300)
-
-    fig, ax1 = subplots()
-    cax = ax1.imshow(det_sum,
-               norm=matplotlib.colors.Normalize(vmin=np.percentile(det_sum, 10), vmax=np.percentile(det_sum, 99.9)),
-               extent=(np.min(det_h), np.max(det_h), np.min(det_v), np.max(det_v)),
-               cmap='turbo',
-               origin='lower')
-    ax1.set_xlabel('q horizontal (1/Å)')
-    ax1.set_ylabel('q vertical (1/Å)')
-    ax1.set_ylim(bottom=0)
-    cbar = fig.colorbar(cax, ax=ax1)
-    plt.tight_layout()
-    plt.savefig(f'{det_sum_path}/{gen_name}_det_sum_lin.png', dpi=300)
-
-    save_config_to_txt(config, f'{det_sum_path}/{gen_name}_config.txt')
+    finally:
+        # Ensure that shared memory is properly closed and unlinked
+        det_ints_shm.close()
+        det_ints_shm.unlink()
 
 if __name__ == "__main__":
 

@@ -23,7 +23,6 @@ def main(config):
     scratch_folder = config.get('scratch_folder', os.getcwd())
     smooth = int(config.get('smooth', 0))
     fill_bkg = str_to_bool(config.get('fill_bkg', 'False'))
-    fix_dc_offset = str_to_bool(config.get('fix_dc_offset', 'False'))
 
     if input_folder:
         input_paths = glob.glob(f'{input_folder}/*{filetype}')
@@ -43,8 +42,7 @@ def main(config):
                                                     scratch_folder=scratch_folder, 
                                                     num_cpus=num_cpus,
                                                     fill_bkg=fill_bkg,
-                                                    smooth=smooth,
-                                                    fix_dc_offset=fix_dc_offset)
+                                                    smooth=smooth)
     
         # Optional downselect iq meshgrid based on max q desired
         iq_small, qx_small, qy_small, qz_small = downselect_voxelgrid(iq, qx, qy, qz, max_q)

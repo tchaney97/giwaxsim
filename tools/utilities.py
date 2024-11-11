@@ -4,6 +4,7 @@ import xraydb
 import re
 import os
 from tools.ptable_dict import ptable, aff_dict
+from multiprocessing import shared_memory
 
 def str_to_bool(input_value, default=False):
     """
@@ -328,3 +329,9 @@ def get_element_f1_f2_dict(energy, elements):
             print(f"An error occurred for element '{element}': {e}")
 
     return f1_f2_dict
+
+def create_shared_array(shape, name):
+    # Create a shared memory array
+    d_size = np.prod(shape) * np.dtype(np.float64).itemsize
+    shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
+    return shm

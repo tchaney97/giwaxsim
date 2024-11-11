@@ -205,3 +205,65 @@ def add_f0_q_dependence(det_img, det_h, det_v, element):
             
     return det_img_new
 
+def rebin_qmap_and_mask(qxy1, qz1, qmap2, qxy2, qz2, qmap2_mask):
+    """
+    Rebins qmap2 to match the dimensions of qmap1, then combines them into
+    a single qmap with qmap1 on the left and qmap2 on the right, split down qxy=0.
+
+    Parameters:
+    - qxy1 (np.ndarray): qxy axis values for the first qmap.
+    - qz1 (np.ndarray): qz axis values for the first qmap.
+    - qmap2 (np.ndarray): The second qmap array to be rebinned and combined.
+    - qxy2 (np.ndarray): qxy axis values for the second qmap.
+    - qz2 (np.ndarray): qz axis values for the second qmap.
+    - qmap2_mask (np.ndarray): array of size(qmap2) where values of 1 are masked, 0 unmasked
+
+    Returns:
+    - qmap2_rebinned, qmap2_mask_rebinned 
+    """
+    # Create meshgrid for qmap1 and qmap2
+    grid1_x, grid1_z = np.meshgrid(qxy1, qz1)
+    grid2_x, grid2_z = np.meshgrid(qxy2, qz2)
+
+       # Flatten the meshgrids and qmap2 for interpolation
+    points2 = np.vstack((grid2_x.ravel(), grid2_z.ravel())).T
+    values2 = qmap2.ravel()
+
+    # Check for matching lengths (this step is for debugging and can be removed later)
+    assert points2.shape[0] == values2.shape[0], "The number of points and values must match."
+
+    # Interpolate qmap2 onto the grid defined by qmap1
+    qmap2_rebinned = griddata(points2, values2, (grid1_x, grid1_z), method='linear')
+
+    # rebin mask such that any rebinned pixel that contains a masked pixel is masked
+    # Interpolate the mask as well, setting any interpolated pixel with a masked value to 1
+    mask_values = qmap2_mask.ravel()
+    qmap2_mask_rebinned = griddata(points2, mask_values, (grid1_x, grid1_z), method='linear')
+
+    #change threshold to adjust how mask is rebinned. >0 will catch all pixels that contain masked region
+    qmap2_mask_rebinned = np.where(qmap2_mask_rebinned > 0, 1, 0)  # Threshold to identify masked regions
+
+
+    return qmap2_rebinned, qmap2_mask_rebinned
+
+def scale_offset_mask_qmap(qmap, qmap_mask, scale=1, offset=0):
+    """
+    Applies a mask, scaling, and offset to a qmap.
+
+    Parameters:
+    - qmap (np.ndarray): The qmap array to be adjusted.
+    - qmap_mask (np.ndarray): Mask array where values of 1 are masked, 0 unmasked.
+    - scale (float): Scaling factor to apply to qmap values.
+    - offset (float): Offset to add to qmap values after scaling.
+
+    Returns:
+    - qmap_adjusted (np.ndarray): The qmap after masking, scaling, and offset.
+    """
+
+    # Apply scale and offset to the masked qmap
+    qmap_adjusted = qmap_masked * scale + offset
+
+    # Apply the mask: set masked regions to NaN to exclude them from scaling and offset
+    qmap_masked = np.where(qmap_mask == 1, 0, qmap)
+
+    return qmap_adjusted

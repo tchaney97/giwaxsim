@@ -1,5 +1,6 @@
 import numpy as np
 from tools.utilities import rotation_matrix
+from multiprocessing import Pool, shared_memory
 
 def make_detector(h_max, num_pixels_h, v_max, num_pixels_v):
     """
@@ -285,12 +286,21 @@ def generate_detector_ints(args):
     output:
     - filename: string
     """
-    iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, det_save_path = args
+    iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, det_ints_shm_name = args
     det_x2, det_y2, det_z2 = rotate_psi_phi_theta(det_x, det_y, det_z, psi, phi, theta)
     det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2)
     det_int *= psi_weight*phi_weight*theta_weight
-    # det_int = intersect_detector(iq, qx, qy, qz, det_x2, det_y2, det_z2, det_h, det_v)
-    filename = f'{det_save_path}/det_ints_psi{psi*100:.0f}_phi{phi*100:.0f}_theta{theta*100:.0f}.npy'
-    np.save(filename, det_int)
-    return filename
+
+    # Access the shared memory arrays using their names
+    det_ints_shm = shared_memory.SharedMemory(name=det_ints_shm_name)
+    # Create numpy arrays from the shared memory buffers for voxel grid and voxel count
+    det_ints = np.ndarray(np.shape(det_int), dtype=np.float64, buffer=det_ints_shm.buf)
+    det_ints += det_int
+    
+    det_ints_shm.close()
+
+
+    # filename = f'{det_save_path}/det_ints_psi{psi*100:.0f}_phi{phi*100:.0f}_theta{theta*100:.0f}.npy'
+    # np.save(filename, det_int)
+    # return filename
 
