@@ -36,8 +36,8 @@ def main(config):
     theta_end = float(config.get('theta_end'))
     theta_num = int(config.get('theta_num'))
     theta_weights_path = config.get('theta_weights_path', None)
-    mirror = str_to_bool(config.get('mirror', False))
-    cleanup = str_to_bool(config.get('cleanup', False))
+    mirror = str_to_bool(config.get('mirror', 'False'))
+    cleanup = str_to_bool(config.get('cleanup', 'False'))
     num_cpus = int(config.get('num_cpus', os.cpu_count()))
     scratch_folder = config.get('scratch_folder', False)
 

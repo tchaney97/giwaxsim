@@ -309,116 +309,113 @@ def rectangular_collapse_lengths(x_vals, hor_length, ver_length, phi):
     return np.asarray(lengths)
 
 def rotate_project_fft_coords(args):
-        # coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth = args
+    # coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth = args
 
-        ###
-        coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name = args
-        ###
+    ###
+    coords, f_values, phi, grid_size, r_voxel_size, avg_voxel_f, x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name = args
+    ###
 
-        #rotate coords about phi
-        coords_rot = rotate_coords_z(coords, phi)
+    #rotate coords about phi
+    coords_rot = rotate_coords_z(coords, phi)
 
-        # Shift coords array to origin
-        coords_rot[:,0] -= np.min(coords_rot[:,0])
-        coords_rot[:,1] -= np.min(coords_rot[:,1])
-        coords_rot[:,2] -= np.min(coords_rot[:,2])
+    # Shift coords array to origin
+    coords_rot[:,0] -= np.min(coords_rot[:,0])
+    coords_rot[:,1] -= np.min(coords_rot[:,1])
+    coords_rot[:,2] -= np.min(coords_rot[:,2])
 
-        #project coords 2D
-        # Convert y, z coordinates to pixel indices
-        y_indices = (coords_rot[:, 1] // r_voxel_size).astype(int)
-        z_indices = (coords_rot[:, 2] // r_voxel_size).astype(int)
+    #project coords 2D
+    # Convert y, z coordinates to pixel indices
+    y_indices = (coords_rot[:, 1] // r_voxel_size).astype(int)
+    z_indices = (coords_rot[:, 2] // r_voxel_size).astype(int)
 
-        # Create a mask for valid indices (within the detector bounds)
-        valid_mask = (y_indices >= 0) & (y_indices < grid_size) & (z_indices >= 0) & (z_indices < grid_size)
-        y_indices = y_indices[valid_mask]
-        z_indices = z_indices[valid_mask]
-        valid_fs = f_values[valid_mask]
+    # Create a mask for valid indices (within the detector bounds)
+    valid_mask = (y_indices >= 0) & (y_indices < grid_size) & (z_indices >= 0) & (z_indices < grid_size)
+    y_indices = y_indices[valid_mask]
+    z_indices = z_indices[valid_mask]
+    valid_fs = f_values[valid_mask]
 
-        # Initialize the detector grid
-        detector_grid = np.zeros((grid_size, grid_size), dtype=complex)
+    # Initialize the detector grid
+    detector_grid = np.zeros((grid_size, grid_size), dtype=complex)
 
-        # Accumulate intensities in the corresponding pixels
-        np.add.at(detector_grid, (z_indices, y_indices), valid_fs)
+    # Accumulate intensities in the corresponding pixels
+    np.add.at(detector_grid, (z_indices, y_indices), valid_fs)
 
-        #note this method assumes the simulated slab is a rectangular prism
-        #this mehtod is not perfect as it does not account for "thickness variations"--
-        #--of the slab when the detector collapses the slab at non-orthogonal angles
-        max_voxels = np.sqrt(x_bound**2 + y_bound**2)//r_voxel_size
-        # Determine the bounds of data
-        y_min = np.min(y_indices)
-        z_min = np.min(z_indices)
-        y_max = np.max(y_indices)
-        z_max = np.max(z_indices)
-        if fill_bkg:
-            x_vals = np.arange(grid_size)*r_voxel_size
-            lengths = rectangular_collapse_lengths(x_vals, y_bound, x_bound, phi)
-            num_missing_voxels = (max_voxels - (lengths//r_voxel_size)).astype(int)
-            amorphous_contribution = np.tile(num_missing_voxels*avg_voxel_f, (grid_size, 1))
-            detector_grid = (detector_grid+amorphous_contribution)
+    #note this method assumes the simulated slab is a rectangular prism
+    #this mehtod is not perfect as it does not account for "thickness variations"--
+    #--of the slab when the detector collapses the slab at non-orthogonal angles
+    max_voxels = np.sqrt(x_bound**2 + y_bound**2)//r_voxel_size
+    # Determine the bounds of data
+    y_min = np.min(y_indices)
+    z_min = np.min(z_indices)
+    y_max = np.max(y_indices)
+    z_max = np.max(z_indices)
+    if fill_bkg:
+        x_vals = np.arange(grid_size)*r_voxel_size
+        lengths = rectangular_collapse_lengths(x_vals, y_bound, x_bound, phi)
+        num_missing_voxels = (max_voxels - (lengths//r_voxel_size)).astype(int)
+        amorphous_contribution = np.tile(num_missing_voxels*avg_voxel_f, (grid_size, 1))
+        detector_grid = (detector_grid+amorphous_contribution)
 
-            # Fill the outside areas using the averaged edge values
-            detector_grid[:z_min, :] = avg_voxel_f*max_voxels  # Top area
-            detector_grid[z_max:, :] = avg_voxel_f*max_voxels  # Bottom area
-            detector_grid[z_min:z_max + 1, :y_min+1] = avg_voxel_f*max_voxels  # Left area
-            detector_grid[z_min:z_max + 1, y_max:] = avg_voxel_f*max_voxels  # Right area
+        # Fill the outside areas using the averaged edge values
+        detector_grid[:z_min, :] = avg_voxel_f*max_voxels  # Top area
+        detector_grid[z_max:, :] = avg_voxel_f*max_voxels  # Bottom area
+        detector_grid[z_min:z_max + 1, :y_min+1] = avg_voxel_f*max_voxels  # Left area
+        detector_grid[z_min:z_max + 1, y_max:] = avg_voxel_f*max_voxels  # Right area
 
-        # Create a 1D smoothing transition along each axis
-        if smooth:
-            avg_val = avg_voxel_f*max_voxels
-            sigma = smooth
-            mask_y = np.zeros(detector_grid.shape[1])
-            mask_z = np.zeros(detector_grid.shape[0])
-            mask_y[y_min+sigma:y_max-sigma] = 1
-            mask_z[z_min+sigma:z_max-sigma] = 1
+    # Create a 1D smoothing transition along each axis
+    if smooth:
+        avg_val = avg_voxel_f*max_voxels
+        sigma = smooth
+        mask_y = np.zeros(detector_grid.shape[1])
+        mask_z = np.zeros(detector_grid.shape[0])
+        mask_y[y_min+sigma:y_max-sigma] = 1
+        mask_z[z_min+sigma:z_max-sigma] = 1
 
-            # Apply 1D Gaussian smoothing along each axis
-            smoothed_mask_y = gaussian_filter1d(mask_y, sigma=sigma, mode='wrap')
-            smoothed_mask_z = gaussian_filter1d(mask_z, sigma=sigma, mode='wrap')
+        # Apply 1D Gaussian smoothing along each axis
+        smoothed_mask_y = gaussian_filter1d(mask_y, sigma=sigma, mode='wrap')
+        smoothed_mask_z = gaussian_filter1d(mask_z, sigma=sigma, mode='wrap')
 
-            # Create a 2D smoothing mask by multiplying the 1D masks
-            smoothing_mask = np.outer(smoothed_mask_z, smoothed_mask_y)
-            # Apply the smoothing mask to blend the ROI and the padded values
-            detector_grid = detector_grid * smoothing_mask + avg_val * (1 - smoothing_mask)
+        # Create a 2D smoothing mask by multiplying the 1D masks
+        smoothing_mask = np.outer(smoothed_mask_z, smoothed_mask_y)
+        # Apply the smoothing mask to blend the ROI and the padded values
+        detector_grid = detector_grid * smoothing_mask + avg_val * (1 - smoothing_mask)
 
-        # Calculate axis q-values
-        q_h = np.fft.fftfreq(grid_size, d=r_voxel_size) * 2 * np.pi
-        q_v = np.fft.fftfreq(grid_size, d=r_voxel_size) * 2 * np.pi
-        q_h_shifted = fftshift(q_h)
-        q_v_shifted = fftshift(q_v)
+    # Calculate axis q-values
+    q_h = np.fft.fftfreq(grid_size, d=r_voxel_size) * 2 * np.pi
+    q_v = np.fft.fftfreq(grid_size, d=r_voxel_size) * 2 * np.pi
+    q_h_shifted = fftshift(q_h)
+    q_v_shifted = fftshift(q_v)
 
-        # Compute the Fourier transform of the density grid
-        ft_density = fftn(detector_grid)
-        ft_density_shifted = fftshift(ft_density)  # Shift the zero-frequency component to the center of the spectrum
+    # Compute the Fourier transform of the density grid
+    ft_density = fftn(detector_grid)
+    ft_density_shifted = fftshift(ft_density)  # Shift the zero-frequency component to the center of the spectrum
 
-        # Magnitude squared of the Fourier transform for scattering intensity I(q)
-        iq_2d = np.abs(ft_density_shifted)**2
+    # Magnitude squared of the Fourier transform for scattering intensity I(q)
+    iq_2d = np.abs(ft_density_shifted)**2
 
-        phi_100x = int(phi*100)
-        filepath = f'{temp_folder}/tempfile_{phi_100x}'
+    #some way to assign each pixel qx,qy,qz with trig
+    #rotating the coordinates by phi is equivalent to detector rotation by -phi
+    right_qy = np.max(q_h_shifted) * np.cos(np.deg2rad(-phi))
+    left_qy = -right_qy
+    right_qx = -np.max(q_h_shifted) * np.sin(np.deg2rad(-phi))
+    left_qx = -right_qx
+    det_h_qy = np.linspace(left_qy, right_qy, num=len(q_h_shifted))
+    det_h_qx = np.linspace(left_qx, right_qx, num=len(q_h_shifted))
+    det_v_qz = q_v_shifted
 
-        #some way to assign each pixel qx,qy,qz with trig
-        #rotating the coordinates by phi is equivalent to detector rotation by -phi
-        right_qy = np.max(q_h_shifted) * np.cos(np.deg2rad(-phi))
-        left_qy = -right_qy
-        right_qx = -np.max(q_h_shifted) * np.sin(np.deg2rad(-phi))
-        left_qx = -right_qx
-        det_h_qy = np.linspace(left_qy, right_qy, num=len(q_h_shifted))
-        det_h_qx = np.linspace(left_qx, right_qx, num=len(q_h_shifted))
-        det_v_qz = q_v_shifted
-
-        # np.save(f'{filepath}_amorphgrid.npy', amorphous_contribution)
-        # np.save(f'{filepath}_detgrid.npy', detector_grid)
-        # np.save(f'{filepath}_iq.npy', iq_2d)
-        # np.save(f'{filepath}_h_qx.npy', det_h_qx)
-        # np.save(f'{filepath}_h_qy.npy', det_h_qy)
-        # np.save(f'{filepath}_v_qz.npy', det_v_qz)
+    # np.save(f'{filepath}_amorphgrid.npy', amorphous_contribution)
+    # np.save(f'{filepath}_detgrid.npy', detector_grid)
+    # np.save(f'{filepath}_iq.npy', iq_2d)
+    # np.save(f'{filepath}_h_qx.npy', det_h_qx)
+    # np.save(f'{filepath}_h_qy.npy', det_h_qy)
+    # np.save(f'{filepath}_v_qz.npy', det_v_qz)
 
 
-        ###
-        process_file2(iq_2d, det_h_qx, det_h_qy, det_v_qz, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name)
-        ###
+    ###
+    process_file2(iq_2d, det_h_qx, det_h_qy, det_v_qz, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name)
+    ###
 
-        # return filepath
+    # return filepath
 
 def process_file(filepath, q_num, qx, qy, qz, voxel_grid_shm_name, voxel_grid_count_shm_name):
     # Access the shared memory arrays using their names
@@ -606,15 +603,6 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
     phis = np.linspace(0,last_phi, num=phi_num)
     print(phi_num)
 
-    #save in some scratch folder to combine into voxelgrid later
-    if scratch_folder:
-        folder = scratch_folder
-    else:
-        folder = os.getcwd()
-    temp_folder = f'{folder}/tempfiles'
-    if not os.path.exists(temp_folder):
-        os.mkdir(temp_folder)
-
     #good to have this parallelizable
     if aff_num_qs == 1:
         #calculate f values
@@ -632,7 +620,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         # Create shared arrays for voxel grid and voxel count with the specified dimensions
         voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
         voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
-        args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, 
+        args = [(coords, f_values, phi, grid_size, r_voxel_size, avg_voxel_f, 
                  x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for phi in phis]
  
          # Multiprocessing (parallel) slower
@@ -690,7 +678,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
             # Create shared arrays for voxel grid and voxel count with the specified dimensions
             voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
             voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
-            args = [(coords, f_values, phi, grid_size, r_voxel_size, temp_folder, avg_voxel_f, 
+            args = [(coords, f_values, phi, grid_size, r_voxel_size, avg_voxel_f, 
                     x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for phi in phis]
     
             # Multiprocessing (parallel) slower
