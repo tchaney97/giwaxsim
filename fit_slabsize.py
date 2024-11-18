@@ -163,7 +163,7 @@ def main(config):
     plot_fit(savepath, rebin_map, sim_comp_map, diff_map, det_h_trim, det_v_trim, max_q, suptitle)
 
     savepath = f'{save_folder}/fit_result_linecut.png'
-    plot_linecuts(savepath, rebin_map, sim_comp_map, diff_map, det_h_trim, det_v_trim, max_q, suptitle)
+    plot_linecuts(savepath, rebin_map, sim_comp_map, det_h_trim, det_v_trim, suptitle)
 
     savepath = f'{save_folder}/fit_result.txt'
     # Save the fit report to a .txt file
