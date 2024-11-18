@@ -331,7 +331,11 @@ def get_element_f1_f2_dict(energy, elements):
     return f1_f2_dict
 
 def create_shared_array(shape, name):
-    # Create a shared memory array
     d_size = np.prod(shape) * np.dtype(np.float64).itemsize
-    shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
+    try:
+        shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
+    except FileExistsError:
+        existing_shm = shared_memory.SharedMemory(name=name)
+        existing_shm.unlink()  # Clean up the existing shared memory
+        shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
     return shm
