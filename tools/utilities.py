@@ -3,6 +3,7 @@ from collections import Counter
 import xraydb
 import re
 import os
+import uuid
 from tools.ptable_dict import ptable, aff_dict
 from multiprocessing import shared_memory
 
@@ -337,5 +338,27 @@ def create_shared_array(shape, name):
     except FileExistsError:
         existing_shm = shared_memory.SharedMemory(name=name)
         existing_shm.unlink()  # Clean up the existing shared memory
+        shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
+    return shm
+
+def create_shared_array(shape, name=None):
+    d_size = np.prod(shape) * np.dtype(np.float64).itemsize
+    
+    # # Generate a base name if none is provided
+    # if name is None:
+    #     name = f"shm_{uuid.uuid4().hex}"
+    # else:
+    #     # Append a UUID to ensure uniqueness
+    #     name = f"{name}_{uuid.uuid4().hex}"
+
+    #weird macOS limit at 31 characters
+    name = uuid.uuid4().hex[:29]
+    try:
+        # Try to create the shared memory with the unique name
+        shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
+    except FileExistsError:
+        # Clean up the existing shared memory if a conflict arises
+        existing_shm = shared_memory.SharedMemory(name=name)
+        existing_shm.unlink()  # Unlink the existing shared memory
         shm = shared_memory.SharedMemory(create=True, size=d_size, name=name)
     return shm

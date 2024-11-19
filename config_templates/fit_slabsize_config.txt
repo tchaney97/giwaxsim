@@ -15,14 +15,14 @@ gamma=90
 
 # voxelgridmaker variables
 r_voxel_size=0.3
-q_voxel_size=0.02
+q_voxel_size=0.03
 max_q=2
 energy=12700
 fill_bkg=True
 smooth=50
 
 #detectormaker variables
-num_pixels=500
+num_pixels=125
 angle_init_val1=90
 angle_init_val2=90
 angle_init_val3=90
@@ -53,4 +53,4 @@ pad_range_max=1.55
 
 #save directory
 save_folder=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/OPV_GIWAXS/PM6_forwardsim/slabsize_fitting
-num_evals=2
+num_evals=5

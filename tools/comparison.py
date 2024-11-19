@@ -759,7 +759,7 @@ def voxelgridmaker_fitting(coords, elements, r_voxel_size, q_voxel_size, max_q, 
     voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
     voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
     args = [(coords, f_values, phi, grid_size, r_voxel_size, avg_voxel_f, 
-             x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for phi in phis]
+             x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, voxel_grid_shm.name,  voxel_grid_count_shm.name) for phi in phis]
 
      # Multiprocessing (parallel) slower
     ###
@@ -846,7 +846,7 @@ def detectormaker_fitting(iq, qx, qy, qz, num_pixels, max_q, angle_init_vals, an
     # Create args list with angle-weight pairs
     det_ints_shm = create_shared_array(det_pixels, 'det_ints_shared')
     args_list = [
-        (iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, 'det_ints_shared')
+        (iq, qx, qy, qz, det_x, det_y, det_z, psi, psi_weight, phi, phi_weight, theta, theta_weight, det_ints_shm.name)
         for psi, psi_weight in zip(psis, psi_weights)
         for phi, phi_weight in zip(phis, phi_weights)
         for theta, theta_weight in zip(thetas, theta_weights)

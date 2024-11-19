@@ -515,7 +515,7 @@ def frames_to_iq_parallel(filepaths, q_num, qx, qy, qz):
     try:
         # Use ThreadPoolExecutor to process each file in parallel
         with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for filepath in filepaths]
+            futures = [executor.submit(process_file, filepath, q_num, qx, qy, qz, voxel_grid_shm.name, voxel_grid_count_shm.name) for filepath in filepaths]
             for future in as_completed(futures):
                 future.result()
 
@@ -621,7 +621,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
         voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
         voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
         args = [(coords, f_values, phi, grid_size, r_voxel_size, avg_voxel_f, 
-                 x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for phi in phis]
+                 x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, voxel_grid_shm.name, voxel_grid_count_shm.name) for phi in phis]
  
          # Multiprocessing (parallel) slower
         ###
@@ -679,7 +679,7 @@ def generate_voxel_grid_low_mem(input_path, r_voxel_size, q_voxel_size, max_q, a
             voxel_grid_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_shared')
             voxel_grid_count_shm = create_shared_array((q_num, q_num, q_num), 'voxel_grid_count_shared')
             args = [(coords, f_values, phi, grid_size, r_voxel_size, avg_voxel_f, 
-                    x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, 'voxel_grid_shared', 'voxel_grid_count_shared') for phi in phis]
+                    x_bound, y_bound, z_bound, fill_bkg, smooth, qx, qy, qz, voxel_grid_shm.name, voxel_grid_count_shm.name) for phi in phis]
     
             # Multiprocessing (parallel) slower
             ###

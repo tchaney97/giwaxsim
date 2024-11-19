@@ -46,6 +46,21 @@ def fullfit_model(params, fixed_slab_params, fixed_voxelgrid_params, fixed_detec
         residuals = (rebin_map - scaled_map) * (rebin_mask == 0)
         return residuals.ravel()  # Flatten to a 1D array for lmfit
 
+# Define a class for logging during the fit
+class FitLogger:
+    def __init__(self):
+        self.iterations = []
+        self.param_logs = []
+        self.residual_norms = []
+
+    def callback(self, params, iter, resid, *args, **kwargs):
+        # Store iteration number
+        self.iterations.append(iter)
+        # Store parameter values
+        self.param_logs.append({name: param.value for name, param in params.items()})
+        # Store residual norm
+        self.residual_norms.append(np.linalg.norm(resid))
+
 def main(config):
     #Slabmaker variables
     input_filepath = config.get('input_filepath') 
@@ -145,8 +160,16 @@ def main(config):
     fixed_detectormaker_params = (num_pixels, angle_init_vals, angle_init_axs, psis, psi_weights_path, phis, phi_weights_path, thetas, theta_weights_path)
     fixed_exp_params = (rebin_map, rebin_mask, exp_qxy, exp_qz, pad_width, pad_range)
 
+    logger = FitLogger()
+
     # Perform the fit using lmfit's minimize function
-    result = lmfit.minimize(fullfit_model, params, args=(fixed_slab_params, fixed_voxelgrid_params, fixed_detectormaker_params, fixed_exp_params), method='nelder', max_nfev=num_evals)
+    result = lmfit.minimize(fullfit_model, params, args=(fixed_slab_params,
+                                                        fixed_voxelgrid_params, 
+                                                        fixed_detectormaker_params, 
+                                                        fixed_exp_params), 
+                                                        method='nelder', 
+                                                        max_nfev=num_evals, 
+                                                        iter_cb=logger.callback)
 
     # Access the optimized scale and offset
     best_x_size = result.params['x_size'].value
@@ -171,6 +194,35 @@ def main(config):
         file.write(lmfit.fit_report(result))
 
     save_config_to_txt(config, f'{save_folder}/fit_config.txt')
+
+    # Convert logged data to a dictionary of parameter trajectories
+    param_trajectories = {key: [] for key in logger.param_logs[0].keys()}
+    for param_set in logger.param_logs:
+        for key, value in param_set.items():
+            param_trajectories[key].append(value)
+
+    # Plot residual norm vs. iteration
+    savepath = f'{save_folder}/fit_residuals.png'
+    plt.figure()
+    plt.plot(logger.iterations, logger.residual_norms, label='Residual Norm')
+    plt.xlabel('Iteration')
+    plt.ylabel('Residual Norm')
+    plt.title('Convergence of Residual Norm')
+    plt.legend()
+    plt.savefig(savepath, dpi=300)
+    plt.close()
+
+    # Plot parameter evolution
+    for param_name, values in param_trajectories.items():
+        savepath = f'{save_folder}/fit_{param_name}_evolution.png'
+        plt.figure()
+        plt.plot(logger.iterations, values, label=param_name)
+        plt.xlabel('Iteration')
+        plt.ylabel(f'{param_name} Value')
+        plt.title(f'Evolution of {param_name}')
+        plt.legend()
+        plt.savefig(savepath, dpi=300)
+        plt.close()
 
 if __name__ == "__main__":
 
