@@ -1,28 +1,28 @@
 #Slabmaker variables
-input_filepath=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/OPV_GIWAXS/PM6_forwardsim/xyz_files_Oct2024/pdb_files/aHEQ100.pdb
+input_filepath=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/simulations/decamer/Equilibrated/JyEQ100.pdb
 x_size_init=200
-y_size_init=50
-z_size_init=100
+y_size_init=58
+z_size_init=85
 fit_x=True
 fit_y=True
 fit_z=True
-a=85.920
-b=62.461
-c=40.115
+a=200.3
+b=58.560
+c=85.13
 alpha=90
 beta=90
 gamma=90
 
 # voxelgridmaker variables
 r_voxel_size=0.3
-q_voxel_size=0.03
+q_voxel_size=0.02
 max_q=2
 energy=12700
 fill_bkg=True
-smooth=50
+smooth=25
 
 #detectormaker variables
-num_pixels=125
+num_pixels=250
 angle_init_val1=90
 angle_init_val2=90
 angle_init_val3=90
@@ -47,10 +47,10 @@ img_path=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_
 qxy_path=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/experimental_data/TC47/TC47_th0.15_qxy.txt
 qz_path=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/experimental_data/TC47/TC47_th0.15_qz.txt
 
-pad_width=0.1
+pad_width=0.12
 pad_range_min=1.05
 pad_range_max=1.55
 
 #save directory
-save_folder=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/OPV_GIWAXS/PM6_forwardsim/slabsize_fitting
-num_evals=5
+save_folder=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/OPV_GIWAXS/PM6_forwardsim/decamer_sims_Dec5/Jy_EQ_faceon
+num_evals=0

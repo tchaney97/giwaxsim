@@ -591,96 +591,84 @@ def shift_peak(image, det_h, det_v, pad_width_qspace, pad_range_qspace):
 
     return reconstructed_image
 
+
 def slabmaker_fitting(input_filepath, x_size, y_size, z_size, a, b, c, alpha, beta, gamma):
-    
-    if input_filepath[-3:] == 'xyz':
+    # Load file based on extension
+    if input_filepath.lower().endswith('.xyz'):
         coords, elements = load_xyz(input_filepath)
-    elif input_filepath[-3:] == 'pdb':
+    elif input_filepath.lower().endswith('.pdb'):
         coords, elements = load_pdb(input_filepath)
     else:
-        raise Exception('files must be a .pdb or .xyz file')
-    a_vect, b_vect, c_vect = calc_real_space_abc(a, b, c, alpha, beta, gamma)
-    num_x = int(np.ceil(2*x_size/a_vect[0]))
-    num_y = int(np.ceil(2*y_size/b_vect[1]))
-    num_z = int(np.ceil(2*z_size/c_vect[2]))
-    
-    coords_original = coords
-    elements_original = elements
-    for i in range(num_x):
-        coords_new = coords_original+[a_vect[0]*(i+1), 0, 0]
-        if i == 0:
-            coords_append = coords_new
-            elements_append = elements_original
-        else:
-            coords_append = np.concatenate((coords_append, coords_new), axis=0)
-            elements_append = np.concatenate((elements_append, elements), axis=0)  
-        if i==num_x-1:
-            coords = np.concatenate((coords_original, coords_append), axis=0)
-            elements = np.concatenate((elements_original, elements_append), axis=0)
-    
-    coords_original = coords
-    elements_original = elements
-    for i in range(num_y):
-        coords_new = coords_original+[b_vect[0]*(i+1), b_vect[1]*(i+1), 0]
-        if i ==0:
-            coords_append = coords_new
-            elements_append = elements_original
-        else:
-            coords_append = np.concatenate((coords_append, coords_new), axis=0)
-            elements_append = np.concatenate((elements_append, elements), axis=0)
-        if i==num_y-1:
-            coords = np.concatenate((coords_original, coords_append), axis=0)
-            elements = np.concatenate((elements_original, elements_append), axis=0)
-    
-    coords_original = coords
-    elements_original = elements
-    for i in range(num_z):
-        coords_new = coords_original + [c_vect[0]*(i+1),  c_vect[1]*(i+1), c_vect[2]*(i+1)]
-        if i ==0:
-            coords_append = coords_new
-            elements_append = elements_original
-        else:
-            coords_append = np.concatenate((coords_append, coords_new), axis=0)
-            elements_append = np.concatenate((elements_append, elements), axis=0)
-        if i==num_z-1:
-            coords = np.concatenate((coords_original, coords_append), axis=0)
-            elements = np.concatenate((elements_original, elements_append), axis=0)
-    
-    x_max = np.max(coords[:,0])-np.min(coords[:,0])
-    y_max = np.max(coords[:,1])-np.min(coords[:,1])
-    z_max = np.max(coords[:,2])-np.min(coords[:,2])
-    
-    assert x_max>x_size
-    assert y_max>y_size
-    assert z_max>z_size
-    
-    x_buffer = (x_max-x_size)/2
-    y_buffer = (y_max-y_size)/2
-    z_buffer = (z_max-z_size)/2
-    
-    x_lower = x_buffer
-    x_upper = x_max-x_buffer
-    y_lower = y_buffer
-    y_upper = y_max-y_buffer
-    z_lower = z_buffer
-    z_upper = z_max-z_buffer
-    
-    # Shift coords array to origin 
-    coords[:,0] -= np.min(coords[:,0])
-    coords[:,1] -= np.min(coords[:,1])
-    coords[:,2] -= np.min(coords[:,2])
-    
-    # Use NumPy masking to filter the coordinates
-    mask = (
-        (coords[:,0] >= x_lower) & (coords[:,0] <= x_upper) &
-        (coords[:,1] >= y_lower) & (coords[:,1] <= y_upper) &
-        (coords[:,2] >= z_lower) & (coords[:,2] <= z_upper)
-    )
-    
-    coords_new = coords[mask]
-    elements_new = elements[mask]
+        raise Exception('Files must be a .pdb or .xyz file')
 
-    return coords_new, elements_new
+    # Calculate real-space vectors
+    a_vect, b_vect, c_vect = calc_real_space_abc(a, b, c, alpha, beta, gamma)
+
+    # Calculate replication numbers
+    num_x = int(np.ceil(2 * x_size / a_vect[0]))
+    num_y = int(np.ceil(2 * y_size / b_vect[1]))
+    num_z = int(np.ceil(2 * z_size / c_vect[2]))
+
+    # Expand in x-direction
+    coords_repeat = coords.copy()
+    elements_repeat = elements.copy()
+    for i in range(num_x):
+        coords_new = coords_repeat + np.array([a_vect[0] * (i + 1), 0, 0])
+        coords = np.concatenate((coords, coords_new), axis=0)
+        elements = np.concatenate((elements, elements_repeat), axis=0)
+        # print(np.shape(coords))
+
+    # Expand in y-direction
+    coords_repeat = coords.copy()
+    elements_repeat = elements.copy()
+    for i in range(num_y):
+        coords_new = coords_repeat + np.array([b_vect[0] * (i + 1), b_vect[1] * (i + 1), 0])
+        coords = np.concatenate((coords, coords_new), axis=0)
+        elements = np.concatenate((elements, elements_repeat), axis=0)
+
+    # Expand in z-direction
+    coords_repeat = coords.copy()
+    elements_repeat = elements.copy()
+    for i in range(num_z):
+        coords_new = coords_repeat + np.array([c_vect[0] * (i + 1), c_vect[1] * (i + 1), c_vect[2] * (i + 1)])
+        coords = np.concatenate((coords, coords_new), axis=0)
+        elements = np.concatenate((elements, elements_repeat), axis=0)
+
+    # Calculate bounding box
+    x_max = np.max(coords[:, 0]) - np.min(coords[:, 0])
+    y_max = np.max(coords[:, 1]) - np.min(coords[:, 1])
+    z_max = np.max(coords[:, 2]) - np.min(coords[:, 2])
+
+    # Ensure dimensions exceed required sizes
+    assert x_max > x_size, "x_max must be greater than x_size"
+    assert y_max > y_size, "y_max must be greater than y_size"
+    assert z_max > z_size, "z_max must be greater than z_size"
+
+    # Calculate buffers and filter coordinates
+    x_buffer = (x_max - x_size) / 2
+    y_buffer = (y_max - y_size) / 2
+    z_buffer = (z_max - z_size) / 2
+
+    #shift to origin
+    coords[:, 0] -= np.min(coords[:, 0])
+    coords[:, 1] -= np.min(coords[:, 1])
+    coords[:, 2] -= np.min(coords[:, 2])
+
+    mask = (
+        (coords[:, 0] >= x_buffer) & (coords[:, 0] <= x_max - x_buffer) &
+        (coords[:, 1] >= y_buffer) & (coords[:, 1] <= y_max - y_buffer) &
+        (coords[:, 2] >= z_buffer) & (coords[:, 2] <= z_max - z_buffer)
+    )
+
+    coords_filtered = coords[mask]
+    elements_filtered = elements[mask]
+
+    #shift to origin again
+    coords_filtered[:, 0] -= np.min(coords_filtered[:, 0])
+    coords_filtered[:, 1] -= np.min(coords_filtered[:, 1])
+    coords_filtered[:, 2] -= np.min(coords_filtered[:, 2])
+
+    return coords_filtered, elements_filtered
 
 def voxelgridmaker_fitting(coords, elements, r_voxel_size, q_voxel_size, max_q, energy, num_cpus=None, fill_bkg=False, smooth=0):
     """

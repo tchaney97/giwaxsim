@@ -341,8 +341,6 @@ def rotate_project_fft_coords(args):
     np.add.at(detector_grid, (z_indices, y_indices), valid_fs)
 
     #note this method assumes the simulated slab is a rectangular prism
-    #this mehtod is not perfect as it does not account for "thickness variations"--
-    #--of the slab when the detector collapses the slab at non-orthogonal angles
     max_voxels = np.sqrt(x_bound**2 + y_bound**2)//r_voxel_size
     # Determine the bounds of data
     y_min = np.min(y_indices)

@@ -160,69 +160,79 @@ def main(config):
     fixed_detectormaker_params = (num_pixels, angle_init_vals, angle_init_axs, psis, psi_weights_path, phis, phi_weights_path, thetas, theta_weights_path)
     fixed_exp_params = (rebin_map, rebin_mask, exp_qxy, exp_qz, pad_width, pad_range)
 
-    logger = FitLogger()
+    if num_evals > 0:
+        logger = FitLogger()
 
-    # Perform the fit using lmfit's minimize function
-    result = lmfit.minimize(fullfit_model, params, args=(fixed_slab_params,
-                                                        fixed_voxelgrid_params, 
-                                                        fixed_detectormaker_params, 
-                                                        fixed_exp_params), 
-                                                        method='nelder', 
-                                                        max_nfev=num_evals, 
-                                                        iter_cb=logger.callback)
+        # Perform the fit using lmfit's minimize function
+        result = lmfit.minimize(fullfit_model, params, args=(fixed_slab_params,
+                                                            fixed_voxelgrid_params, 
+                                                            fixed_detectormaker_params, 
+                                                            fixed_exp_params), 
+                                                            method='nelder', 
+                                                            max_nfev=num_evals, 
+                                                            iter_cb=logger.callback)
 
-    # Access the optimized scale and offset
-    best_x_size = result.params['x_size'].value
-    best_y_size = result.params['y_size'].value
-    best_z_size = result.params['z_size'].value
+        # Access the optimized scale and offset
+        best_x_size = result.params['x_size'].value
+        best_y_size = result.params['y_size'].value
+        best_z_size = result.params['z_size'].value
 
-    best_params = (best_x_size, best_y_size, best_z_size)
+        best_params = (best_x_size, best_y_size, best_z_size)
+    
+        savepath = f'{save_folder}/fit_result.txt'
+        # Save the fit report to a .txt file
+        with open(savepath, 'w') as file:
+            file.write(lmfit.fit_report(result))
 
-    rebin_map, sim_comp_map, diff_map = evaluate_fit(best_params,  fixed_slab_params, fixed_voxelgrid_params, fixed_detectormaker_params, fixed_exp_params)
+        # Convert logged data to a dictionary of parameter trajectories
+        param_trajectories = {key: [] for key in logger.param_logs[0].keys()}
+        for param_set in logger.param_logs:
+            for key, value in param_set.items():
+                param_trajectories[key].append(value)
+
+        # Plot residual norm vs. iteration
+        savepath = f'{save_folder}/fit_residuals.png'
+        plt.figure()
+        plt.plot(logger.iterations, logger.residual_norms, label='Residual Norm')
+        plt.xlabel('Iteration')
+        plt.ylabel('Residual Norm')
+        plt.title('Convergence of Residual Norm')
+        plt.legend()
+        plt.savefig(savepath, dpi=300)
+        plt.close()
+
+        # Plot parameter evolution
+        for param_name, values in param_trajectories.items():
+            savepath = f'{save_folder}/fit_{param_name}_evolution.png'
+            plt.figure()
+            plt.plot(logger.iterations, values, label=param_name)
+            plt.xlabel('Iteration')
+            plt.ylabel(f'{param_name} Value')
+            plt.title(f'Evolution of {param_name}')
+            plt.legend()
+            plt.savefig(savepath, dpi=300)
+            plt.close()
+
+        red_chi2 = result.redchi
+        suptitle = f'Reduced Chi2 = {red_chi2:0.0f}'
+    else:
+        best_params = (x_size_init, y_size_init, z_size_init)
+        suptitle = 'No fit done, direct generation'
+
+    rebin_map, sim_comp_map, diff_map = evaluate_fit(best_params, fixed_slab_params, fixed_voxelgrid_params, fixed_detectormaker_params, fixed_exp_params)
+
+    np.save(f'{save_folder}/det_h.npy', det_h_trim)
+    np.save(f'{save_folder}/det_v.npy', det_v_trim)
+    np.save(f'{save_folder}/rebin_map.npy', rebin_map)
+    np.save(f'{save_folder}/sim_comp_map.npy', sim_comp_map)
 
     savepath = f'{save_folder}/fit_result.png'
-    red_chi2 = result.redchi
-    suptitle = f'Reduced Chi2 = {red_chi2:0.0f}'
     plot_fit(savepath, rebin_map, sim_comp_map, diff_map, det_h_trim, det_v_trim, max_q, suptitle)
 
     savepath = f'{save_folder}/fit_result_linecut.png'
     plot_linecuts(savepath, rebin_map, sim_comp_map, det_h_trim, det_v_trim, suptitle)
 
-    savepath = f'{save_folder}/fit_result.txt'
-    # Save the fit report to a .txt file
-    with open(savepath, 'w') as file:
-        file.write(lmfit.fit_report(result))
-
     save_config_to_txt(config, f'{save_folder}/fit_config.txt')
-
-    # Convert logged data to a dictionary of parameter trajectories
-    param_trajectories = {key: [] for key in logger.param_logs[0].keys()}
-    for param_set in logger.param_logs:
-        for key, value in param_set.items():
-            param_trajectories[key].append(value)
-
-    # Plot residual norm vs. iteration
-    savepath = f'{save_folder}/fit_residuals.png'
-    plt.figure()
-    plt.plot(logger.iterations, logger.residual_norms, label='Residual Norm')
-    plt.xlabel('Iteration')
-    plt.ylabel('Residual Norm')
-    plt.title('Convergence of Residual Norm')
-    plt.legend()
-    plt.savefig(savepath, dpi=300)
-    plt.close()
-
-    # Plot parameter evolution
-    for param_name, values in param_trajectories.items():
-        savepath = f'{save_folder}/fit_{param_name}_evolution.png'
-        plt.figure()
-        plt.plot(logger.iterations, values, label=param_name)
-        plt.xlabel('Iteration')
-        plt.ylabel(f'{param_name} Value')
-        plt.title(f'Evolution of {param_name}')
-        plt.legend()
-        plt.savefig(savepath, dpi=300)
-        plt.close()
 
 if __name__ == "__main__":
 

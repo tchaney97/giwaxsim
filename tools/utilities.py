@@ -162,6 +162,40 @@ def load_pdb(pdb_path):
     return coords, elements
 
 
+def load_pdb_cell_params(pdb_path):
+    """
+    Parameters:
+    - pdb_path: string, path to pdb file of molecule, protein, etc.
+
+    Returns:
+    - a, b, c, alpha, beta, gamma:
+      where:
+        a, b, c are the unit cell dimensions in Ångstroms
+        alpha, beta, gamma are the unit cell angles in degrees
+    """
+    unit_cell_params = None
+
+    # Open and read the PDB file
+    with open(pdb_path, 'r') as file:
+        for line in file:
+            if line.startswith("CRYST1"):
+                # Extract unit cell parameters from the CRYST1 line
+                a = float(line[6:15].strip())
+                b = float(line[15:24].strip())
+                c = float(line[24:33].strip())
+                alpha = float(line[33:40].strip())
+                beta = float(line[40:47].strip())
+                gamma = float(line[47:54].strip())
+
+                unit_cell_params = (a, b, c, alpha, beta, gamma)
+                break  # Only one CRYST1 line is expected, exit loop after parsing
+
+    if unit_cell_params is None:
+        raise ValueError("No CRYST1 line found in the PDB file.")
+
+    return a, b, c, alpha, beta, gamma
+
+
 def write_xyz(output_path, coords, elements):
     """
     Writes the molecular structure to an xyz file at the specified path.
