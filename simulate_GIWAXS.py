@@ -78,7 +78,7 @@ def main(config):
     pad_range = (pad_range_min, pad_range_max)
 
     #save directory
-    save_folder = config.get('save_folder')
+    save_folder = config.get('save_folder', os.getcwd())
     os.makedirs(save_folder, exist_ok=True)
 
     if input_folder:

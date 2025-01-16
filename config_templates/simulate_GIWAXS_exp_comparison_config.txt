@@ -39,9 +39,5 @@ qxy_path=./test_experimental_data/TC47_th0.15_qxy.txt
 qz_path=./test_experimental_data/TC47_th0.15_qz.txt
 fit_scale_offset=True
 
-pad_width=0.12
-pad_range_min=1.05
-pad_range_max=1.55
-
 #save directory
 save_folder=./output_data
