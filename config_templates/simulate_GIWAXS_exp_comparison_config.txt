@@ -1,0 +1,47 @@
+# Slabmaker variables
+input_filepath=./test_input_files/PM6_sample.pdb
+x_size=176
+y_size=43
+z_size=186
+
+# voxelgridmaker variables
+r_voxel_size=0.3
+q_voxel_size=0.02
+max_q=2
+energy=12700
+fill_bkg=True
+smooth=25
+
+#detectormaker variables
+num_pixels=500
+angle_init_val1=90
+angle_init_val2=90
+angle_init_val3=90
+angle_init_ax1=psi
+angle_init_ax2=phi
+angle_init_ax3=psi
+psi_start=0
+psi_end=90
+psi_num=91
+psi_weights_path=./test_experimental_data/resampled_ints_PM65CN_91.npy
+phi_start=0
+phi_end=179
+phi_num=180
+theta_start=0
+theta_end=1
+theta_num=1
+mirror=True
+
+#experimental comparison
+mask_path=./test_experimental_data/PM6mask_maxq2.npy
+img_path=./test_experimental_data/TC47_th0.15_qmap.tif
+qxy_path=./test_experimental_data/TC47_th0.15_qxy.txt
+qz_path=./test_experimental_data/TC47_th0.15_qz.txt
+fit_scale_offset=True
+
+pad_width=0.12
+pad_range_min=1.05
+pad_range_max=1.55
+
+#save directory
+save_folder=./output_data
