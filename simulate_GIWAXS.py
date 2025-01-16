@@ -70,11 +70,11 @@ def main(config):
     img_path = config.get('img_path', None)
     qxy_path = config.get('qxy_path', None)
     qz_path = config.get('qz_path', None)
-    fit_scale_offset = str_to_bool(config.get('fit_scale_offset', 'True'))
+    fit_scale_offset = str_to_bool(config.get('fit_scale_offset', 'False'))
 
-    pad_width = float(config.get('pad_width'))
-    pad_range_min = float(config.get('pad_range_min'))
-    pad_range_max = float(config.get('pad_range_max'))
+    pad_width = float(config.get('pad_width', 0))
+    pad_range_min = float(config.get('pad_range_min', 0))
+    pad_range_max = float(config.get('pad_range_max', 0))
     pad_range = (pad_range_min, pad_range_max)
 
     #save directory

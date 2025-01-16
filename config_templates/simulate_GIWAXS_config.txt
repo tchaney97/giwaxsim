@@ -1,6 +1,8 @@
 #Slabmaker variables
-input_filepath=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/simulations/decamer/simulation_batch_test/JyEQ0.pdb
-x_size=230
+#input_filepath=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/simulations/4x16 dimers/Jtype300K/2000ns.pdb
+input_folder=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/simulation_GIWAXS/Jtype_quench/pdbs
+filetype=.pdb
+x_size=176
 y_size=43
 z_size=186
 
@@ -37,11 +39,11 @@ mirror=True
 #img_path=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/experimental_data/TC47/TC47_th0.15_qmap.tif
 #qxy_path=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/experimental_data/TC47/TC47_th0.15_qxy.txt
 #qz_path=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/experimental_data/TC47/TC47_th0.15_qz.txt
-#fit_scale_offset=False
+#fit_scale_offset=True
 
-pad_width=0
-pad_range_min=1.05
-pad_range_max=1.55
+#pad_width=0.12
+#pad_range_min=1.05
+#pad_range_max=1.55
 
 #save directory
-save_folder=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/OPV_GIWAXS/PM6_forwardsim/decamer_sims_Dec5/Jy_EQ0_faceon
+save_folder=/Users/Thomas2/Library/CloudStorage/OneDrive-UCB-O365/Desktop/Research_Stuff/shared_PM6_crystal_study/simulation_GIWAXS/Jtype_quench/simulations
