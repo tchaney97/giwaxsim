@@ -39,7 +39,7 @@ Optionally comparing to experimental data by:
 15. Plotting overlayed linecuts between simulated and experimental data
 
 #### Configuration file parameters:
-- An example configuration file is in `/config_templates/voxelgridmaker_highmem_config.txt`\
+- An example configuration file is in `/config_templates/simulate_GIWAXS_config.txt`\
 \
 <ins>Arguments to define the structure for scattering simulation</ins>
 - `input_filepath`=(string) optionally a path to a `.xyz` or `.pdb` file for I(q) voxelgrid from single file
