@@ -18,7 +18,7 @@ If you find this code useful for your research please consider citing it: [![DOI
 Forward simulations are created through primarily through: `simulate_GIWAXS.py`. This script is intended to be run in the command line with a single argument pointing to the configuration file (ex: `python simulate_GIWAXS.py --config /path/to/config_file.txt`). Details of this script and the configuration file format are described below. Note that whenever a directory is input as a string please do **not** include the trailing `/`:
 
 ### simulate_GIWAXS.py: 
-This script takes a `.pdb` (preferred) or `.xyz` structure file and generates a sample "detector image" in units of Å<sup>-1</sup>. This detector image represents the X-ray scattering that would be observed for the given structure with defined size sampled over the specified structure orientations. With example config values this runs in <5min on M2 macbook air. 
+This script takes a `.pdb` (preferred) or `.xyz` structure file and generates a sample "detector image" in units of Å<sup>-1</sup>. This detector image represents the X-ray scattering that would be observed for the given structure with defined size sampled over the specified structure orientations. Outputs are linearly and log scaled .png along with .npy files containing the detector image and the reciprocal space values for row and column id as qz and qxy respectively. With example config values this runs in <1min on M2 macbook air. 
 
 The script runs through the following steps:
 1. Projecting material coordinates onto the y-z plane.
